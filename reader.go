@@ -30,6 +30,9 @@ type Reader struct {
 	dbfNumRecords   int32
 	dbfHeaderLength int16
 	dbfRecordLength int16
+
+	// Configuration
+	config *ReaderConfig
 }
 
 type readSeekCloser interface {
@@ -39,17 +42,40 @@ type readSeekCloser interface {
 }
 
 // Open opens a Shapefile for reading.
-func Open(filename string) (*Reader, error) {
+func Open(filename string, opts ...ReaderOption) (*Reader, error) {
+	return OpenWithConfig(filename, DefaultReaderConfig(), opts...)
+}
+
+// OpenWithConfig opens a Shapefile for reading with custom configuration.
+func OpenWithConfig(filename string, config *ReaderConfig, opts ...ReaderOption) (*Reader, error) {
+	// Apply options to config
+	for _, opt := range opts {
+		opt(config)
+	}
+
 	ext := filepath.Ext(filename)
 	if strings.ToLower(ext) != ".shp" {
-		return nil, fmt.Errorf("Invalid file extension: %s", filename)
+		return nil, NewShapeError(ErrInvalidFormat,
+			fmt.Sprintf("invalid file extension: %s", filename), nil)
 	}
+
 	shp, err := os.Open(filename)
 	if err != nil {
+		return nil, NewShapeError(ErrIO, "failed to open shapefile", err)
+	}
+
+	s := &Reader{
+		filename: strings.TrimSuffix(filename, ext),
+		shp:      shp,
+		config:   config,
+	}
+
+	if err := s.readHeaders(); err != nil {
+		shp.Close()
 		return nil, err
 	}
-	s := &Reader{filename: strings.TrimSuffix(filename, ext), shp: shp}
-	return s, s.readHeaders()
+
+	return s, nil
 }
 
 // BBox returns the bounding box of the shapefile.
@@ -141,7 +167,8 @@ func newShape(shapetype ShapeType) (Shape, error) {
 	case MULTIPATCH:
 		return new(MultiPatch), nil
 	default:
-		return nil, fmt.Errorf("Unsupported shape type: %v", shapetype)
+		return nil, NewShapeError(ErrUnsupportedType,
+			fmt.Sprintf("unsupported shape type: %v", shapetype), nil)
 	}
 }
 

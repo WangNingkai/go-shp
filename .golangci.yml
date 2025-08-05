@@ -1,0 +1,59 @@
+run:
+  timeout: 5m
+  go: "1.19"
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - varcheck
+    - structcheck
+    - deadcode
+    - gocyclo
+    - gofmt
+    - goimports
+    - misspell
+    - unparam
+    - unconvert
+    - goconst
+    - gofumpt
+    - prealloc
+    - predeclared
+    - revive
+    - exportloopref
+    - nilerr
+    - nolintlint
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+  misspell:
+    locale: US
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+        disabled: false
+        arguments:
+          - "checkPrivateReceivers"
+          - "sayRepetitiveInsteadOfStutters"
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+    - linters:
+        - staticcheck
+      text: "SA9003:"

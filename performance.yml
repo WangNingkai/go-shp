@@ -1,0 +1,82 @@
+# Performance tuning configuration for go-shp
+
+# Memory settings
+memory:
+  # Default buffer size for file operations (64KB)
+  buffer_size: 65536
+
+  # Maximum memory usage for caching (100MB)
+  max_memory_usage: 104857600
+
+  # Enable memory pooling for frequent allocations
+  enable_memory_pool: true
+
+  # Pool sizes for different object types
+  pool_sizes:
+    point_pool: 1000
+    polyline_pool: 500
+    polygon_pool: 500
+    multipoint_pool: 200
+
+# I/O settings
+io:
+  # Read ahead buffer size for sequential reading
+  read_ahead_size: 131072 # 128KB
+
+  # Enable asynchronous I/O where possible
+  async_io: true
+
+  # Compression level for output files (0-9)
+  compression_level: 6
+
+  # Use memory mapping for large files
+  use_mmap: true
+
+  # Threshold for using memory mapping (10MB)
+  mmap_threshold: 10485760
+
+# Validation settings
+validation:
+  # Enable shape validation by default
+  enable_validation: true
+
+  # Skip corrupted shapes instead of failing
+  skip_corrupted: false
+
+  # Maximum coordinate value (for validation)
+  max_coordinate: 1e15
+
+  # Minimum coordinate value (for validation)
+  min_coordinate: -1e15
+
+# Processing settings
+processing:
+  # Enable parallel processing where possible
+  enable_parallel: true
+
+  # Number of worker goroutines for parallel processing
+  # (0 = use runtime.NumCPU())
+  worker_count: 0
+
+  # Batch size for processing operations
+  batch_size: 1000
+
+  # Enable caching of frequently accessed data
+  enable_caching: true
+
+  # Cache size limit (50MB)
+  cache_size_limit: 52428800
+
+# Logging settings
+logging:
+  # Log level (debug, info, warn, error)
+  level: "info"
+
+  # Enable performance logging
+  enable_perf_log: false
+
+  # Log file path (empty = stdout)
+  log_file: ""
+
+  # Enable structured logging (JSON format)
+  structured: false

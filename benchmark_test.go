@@ -1,0 +1,162 @@
+package shp
+
+import (
+	"testing"
+)
+
+// BenchmarkReaderOpen 测试打开文件的性能
+func BenchmarkReaderOpen(b *testing.B) {
+	filename := "test_files/point.shp"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		reader, err := Open(filename)
+		if err != nil {
+			b.Fatal(err)
+		}
+		reader.Close()
+	}
+}
+
+// BenchmarkReaderNext 测试读取形状的性能
+func BenchmarkReaderNext(b *testing.B) {
+	filename := "test_files/point.shp"
+	reader, err := Open(filename)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer reader.Close()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// 重置到文件开头
+		reader.shp.Seek(100, 0)
+		reader.num = 0
+
+		for reader.Next() {
+			_, _ = reader.Shape()
+		}
+
+		if reader.Err() != nil {
+			b.Fatal(reader.Err())
+		}
+	}
+}
+
+// BenchmarkReaderAttributes 测试读取属性的性能
+func BenchmarkReaderAttributes(b *testing.B) {
+	filename := "test_files/point.shp"
+	reader, err := Open(filename)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer reader.Close()
+
+	// 读取一次获取记录数
+	recordCount := 0
+	for reader.Next() {
+		recordCount++
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < recordCount; j++ {
+			_ = reader.ReadAttribute(j, 0)
+		}
+	}
+}
+
+// BenchmarkWriterCreate 测试创建和写入的性能
+func BenchmarkWriterCreate(b *testing.B) {
+	points := []Point{
+		{X: 0.0, Y: 0.0},
+		{X: 1.0, Y: 1.0},
+		{X: 2.0, Y: 2.0},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		writer, err := Create("/tmp/benchmark_test.shp", POINT)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		for _, p := range points {
+			writer.Write(&p)
+		}
+
+		writer.Close()
+	}
+}
+
+// BenchmarkShapeValidation 测试形状验证的性能
+func BenchmarkShapeValidation(b *testing.B) {
+	validator := &DefaultValidator{}
+	point := &Point{X: 1.0, Y: 2.0}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := validator.Validate(point)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkPolyLineCreation 测试多线创建的性能
+func BenchmarkPolyLineCreation(b *testing.B) {
+	parts := [][]Point{
+		{
+			{X: 0.0, Y: 0.0},
+			{X: 1.0, Y: 1.0},
+			{X: 2.0, Y: 0.0},
+		},
+		{
+			{X: 3.0, Y: 3.0},
+			{X: 4.0, Y: 4.0},
+			{X: 5.0, Y: 3.0},
+		},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = NewPolyLine(parts)
+	}
+}
+
+// BenchmarkBBoxCalculation 测试边界框计算的性能
+func BenchmarkBBoxCalculation(b *testing.B) {
+	points := make([]Point, 1000)
+	for i := range points {
+		points[i] = Point{X: float64(i), Y: float64(i * 2)}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = BBoxFromPoints(points)
+	}
+}
+
+// BenchmarkMemoryUsage 内存使用测试
+func BenchmarkMemoryUsage(b *testing.B) {
+	filename := "test_files/point.shp"
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		reader, err := Open(filename)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		var shapes []Shape
+		for reader.Next() {
+			_, shape := reader.Shape()
+			shapes = append(shapes, shape)
+		}
+
+		reader.Close()
+		_ = shapes // 防止编译器优化
+	}
+}

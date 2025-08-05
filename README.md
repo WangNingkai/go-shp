@@ -145,59 +145,59 @@ import (
 func main() {
     // 创建新的 shapefile
     writer, err := shp.Create("output.shp", shp.POINT)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer writer.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer writer.Close()
 
-    // 设置字段
-    fields := []shp.Field{
-        shp.StringField("NAME", 50),
-        shp.NumberField("ID", 10),
-        shp.FloatField("VALUE", 10, 2),
-    }
-    writer.SetFields(fields)
+	// 设置字段
+	fields := []shp.Field{
+		shp.StringField("NAME", 50),
+		shp.NumberField("ID", 10),
+		shp.FloatField("VALUE", 10, 2),
+	}
+	if err := writer.SetFields(fields); err != nil {
+		log.Fatal(err)
+	}
 
-    // 写入点数据
-    points := []struct {
-        Point shp.Point
-        Name  string
-        ID    int
-        Value float64
-    }{
-        {shp.Point{X: 0.0, Y: 0.0}, "Point A", 1, 123.45},
-        {shp.Point{X: 1.0, Y: 1.0}, "Point B", 2, 678.90},
-    }
+	// 写入点数据
+	points := []struct {
+		Point shp.Point
+		Name  string
+		ID    int
+		Value float64
+	}{
+		{shp.Point{X: 0.0, Y: 0.0}, "Point A", 1, 123.45},
+		{shp.Point{X: 1.0, Y: 1.0}, "Point B", 2, 678.90},
+	}
 
-    for _, p := range points {
-        writer.Write(&p.Point)
-        writer.WriteAttribute([]interface{}{p.Name, p.ID, p.Value})
-    }
+	for _, p := range points {
+		row := writer.Write(&p.Point)
+		// 为每个字段分别写入属性值，加上错误处理
+		if err := writer.WriteAttribute(int(row), 0, p.Name); err != nil {
+			log.Fatal(err)
+		}
+		if err := writer.WriteAttribute(int(row), 1, p.ID); err != nil {
+			log.Fatal(err)
+		}
+		if err := writer.WriteAttribute(int(row), 2, p.Value); err != nil {
+			log.Fatal(err)
+		}
+	}
 }
 ```
 
 #### 创建线类型 Shapefile
 
 ```go
-// 创建多线 shapefile
-writer, err := shp.Create("lines.shp", shp.POLYLINE)
-if err != nil {
+# 写入几何和属性
+row := writer.Write(polyline)
+if err := writer.WriteAttribute(int(row), 0, "Line 1"); err != nil {
     log.Fatal(err)
 }
-defer writer.Close()
-
-// 创建线几何
-parts := [][]shp.Point{
-    {
-        {X: 0.0, Y: 0.0},
-        {X: 1.0, Y: 1.0},
-        {X: 2.0, Y: 0.0},
-    },
+if err := writer.WriteAttribute(int(row), 1, 2.236); err != nil {
+    log.Fatal(err)
 }
-polyline := shp.NewPolyLine(parts)
-
-// 写入
-writer.Write(polyline)
 ```
 
 ### 从 ZIP 文件读取
@@ -230,6 +230,27 @@ defer seqReader.Close()
 for seqReader.Next() {
     shape := seqReader.Shape()
     // 处理形状...
+}
+```
+
+### 辅助函数：批量写入属性
+
+为了简化属性写入，你可以创建一个辅助函数：
+
+```go
+func writeAttributes(writer *shp.Writer, row int, attrs []interface{}) error {
+    for fieldIndex, attr := range attrs {
+        if err := writer.WriteAttribute(row, fieldIndex, attr); err != nil {
+            return err
+        }
+    }
+    return nil
+}
+
+// 使用示例
+row := writer.Write(&point)
+if err := writeAttributes(writer, int(row), []interface{}{"Point A", 1, 123.45}); err != nil {
+    log.Fatal(err)
 }
 ```
 
@@ -284,9 +305,9 @@ dateField := shp.DateField("DATE")
 
 #### Writer 方法
 - `Create(filename string, shapeType ShapeType) (*Writer, error)` - 创建新 Shapefile
-- `Write(shape Shape)` - 写入几何对象
-- `WriteAttribute(attrs []interface{})` - 写入属性
-- `SetFields(fields []Field)` - 设置字段定义
+- `Write(shape Shape) int32` - 写入几何对象，返回记录索引
+- `WriteAttribute(row int, field int, value interface{}) error` - 写入属性
+- `SetFields(fields []Field) error` - 设置字段定义
 
 ## 错误处理
 

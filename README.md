@@ -11,6 +11,7 @@
 - 📊 **DBF 属性支持** - 读写 DBF 属性表
 - 🔄 **流式读取** - 支持大文件的顺序读取
 - 🎯 **类型安全** - 使用 Go 的类型系统确保数据安全
+- 🌐 **GeoJSON 转换** - 支持 Shapefile 与 GeoJSON 格式互相转换
 
 ## 支持的几何类型
 
@@ -252,6 +253,99 @@ row := writer.Write(&point)
 if err := writeAttributes(writer, int(row), []interface{}{"Point A", 1, 123.45}); err != nil {
     log.Fatal(err)
 }
+```
+
+### GeoJSON 转换
+
+库提供了完整的 Shapefile 与 GeoJSON 格式互相转换功能。
+
+#### 单个形状转换
+
+```go
+// 创建一个点
+point := &shp.Point{X: -122.4194, Y: 37.7749}
+
+// 转换为 GeoJSON 字符串
+geoJSONStr, err := shp.ShapeToGeoJSONString(point)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(geoJSONStr)
+// 输出: {"type":"Feature","geometry":{"type":"Point","coordinates":[-122.419400,37.774900]},"properties":{}}
+```
+
+#### Shapefile 转 GeoJSON
+
+```go
+// 方法1：使用便利函数
+err := shp.ConvertShapefileToGeoJSON("input.shp", "output.geojson")
+if err != nil {
+    log.Fatal(err)
+}
+
+// 方法2：使用转换器进行更细粒度控制
+converter := shp.GeoJSONConverter{}
+geoJSON, err := converter.ShapefileToGeoJSON("input.shp")
+if err != nil {
+    log.Fatal(err)
+}
+
+// 保存到文件
+err = converter.SaveGeoJSONToFile(geoJSON, "output.geojson")
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+#### GeoJSON 转 Shapefile
+
+```go
+// 方法1：使用便利函数
+err := shp.ConvertGeoJSONToShapefile("input.geojson", "output.shp")
+if err != nil {
+    log.Fatal(err)
+}
+
+// 方法2：使用转换器
+converter := shp.GeoJSONConverter{}
+geoJSON, err := converter.LoadGeoJSONFromFile("input.geojson")
+if err != nil {
+    log.Fatal(err)
+}
+
+err = converter.GeoJSONToShapefile(geoJSON, "output.shp")
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+#### 批量转换
+
+```go
+// 批量转换 Shapefile 到 GeoJSON
+err := shp.BatchConvertShapefilesToGeoJSON("./shapefiles", "./geojson")
+if err != nil {
+    log.Fatal(err)
+}
+
+// 批量转换 GeoJSON 到 Shapefile
+err = shp.BatchConvertGeoJSONsToShapefiles("./geojson", "./shapefiles")
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+#### 命令行工具
+
+项目还提供了一个命令行工具进行转换：
+
+```bash
+# 单文件转换
+go run cmd/convert/main.go -input=input.shp -output=output.geojson
+go run cmd/convert/main.go -input=input.geojson -output=output.shp
+
+# 批量转换
+go run cmd/convert/main.go -batch -input-dir=./shapefiles -output-dir=./geojson
 ```
 
 ## 字段类型

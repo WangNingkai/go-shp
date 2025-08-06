@@ -1,3 +1,4 @@
+// Package shp benchmark tests for Shapefile reading and writing performance.
 package shp
 
 import (
@@ -5,9 +6,11 @@ import (
 	"testing"
 )
 
+const testPointShapefile = "test_files/point.shp"
+
 // BenchmarkReaderOpen 测试打开文件的性能
 func BenchmarkReaderOpen(b *testing.B) {
-	filename := "test_files/point.shp"
+	filename := testPointShapefile
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -15,23 +18,23 @@ func BenchmarkReaderOpen(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		reader.Close()
+		_ = reader.Close()
 	}
 }
 
 // BenchmarkReaderNext 测试读取形状的性能
 func BenchmarkReaderNext(b *testing.B) {
-	filename := "test_files/point.shp"
+	filename := testPointShapefile
 	reader, err := Open(filename)
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// 重置到文件开头
-		reader.shp.Seek(100, 0)
+		_, _ = reader.shp.Seek(100, 0)
 		reader.num = 0
 
 		for reader.Next() {
@@ -46,12 +49,12 @@ func BenchmarkReaderNext(b *testing.B) {
 
 // BenchmarkReaderAttributes 测试读取属性的性能
 func BenchmarkReaderAttributes(b *testing.B) {
-	filename := "test_files/point.shp"
+	filename := testPointShapefile
 	reader, err := Open(filename)
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// 读取一次获取记录数
 	recordCount := 0
@@ -140,7 +143,7 @@ func BenchmarkBBoxCalculation(b *testing.B) {
 
 // BenchmarkMemoryUsage 内存使用测试
 func BenchmarkMemoryUsage(b *testing.B) {
-	filename := "test_files/point.shp"
+	filename := testPointShapefile
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -183,8 +186,8 @@ func setupTestShapefile(filename string, pointCount int) error {
 	for i := 0; i < pointCount; i++ {
 		point := &Point{X: float64(i), Y: float64(i * 2)}
 		row := writer.Write(point)
-		writer.WriteAttribute(int(row), 0, "Point")
-		writer.WriteAttribute(int(row), 1, i)
+		_ = writer.WriteAttribute(int(row), 0, "Point")
+		_ = writer.WriteAttribute(int(row), 1, i)
 	}
 
 	return nil
@@ -193,7 +196,7 @@ func setupTestShapefile(filename string, pointCount int) error {
 // cleanupTestShapefile 清理测试文件
 func cleanupTestShapefile(filename string) {
 	base := filename[:len(filename)-4] // 去掉 .shp
-	os.Remove(base + ".shp")
-	os.Remove(base + ".shx")
-	os.Remove(base + ".dbf")
+	_ = os.Remove(base + ".shp")
+	_ = os.Remove(base + ".shx")
+	_ = os.Remove(base + ".dbf")
 }

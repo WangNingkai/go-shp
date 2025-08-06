@@ -52,8 +52,8 @@ func Create(filename string, t ShapeType) (*Writer, error) {
 	if err != nil {
 		return nil, err
 	}
-	shp.Seek(100, io.SeekStart)
-	shx.Seek(100, io.SeekStart)
+	_, _ = shp.Seek(100, io.SeekStart)
+	_, _ = shx.Seek(100, io.SeekStart)
 	w := &Writer{
 		filename:     filename,
 		shp:          shp,
@@ -64,10 +64,10 @@ func Create(filename string, t ShapeType) (*Writer, error) {
 }
 
 // Append returns a Writer pointer that will append to the given shapefile and
-// the first error that was encounted during creation of that Writer. The
+// the first error that was encountered during creation of that Writer. The
 // shapefile must have a valid index file.
 func Append(filename string) (*Writer, error) {
-	shp, err := os.OpenFile(filename, os.O_RDWR, 0666)
+	shp, err := os.OpenFile(filename, os.O_RDWR, 0o666)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func Append(filename string) (*Writer, error) {
 		return nil, fmt.Errorf("cannot read bounding box: %v", er.e)
 	}
 
-	shx, err := os.OpenFile(basename+".shx", os.O_RDWR, 0666)
+	shx, err := os.OpenFile(basename+".shx", os.O_RDWR, 0o666)
 	if os.IsNotExist(err) {
 		// TODO allow index file to not exist, in that case just
 		// read through all the shapes and create it on the fly
@@ -111,7 +111,7 @@ func Append(filename string) (*Writer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot read last shape index: %v", err)
 	}
-	offset = offset * 2
+	offset *= 2
 	_, err = shp.Seek(int64(offset), io.SeekStart)
 	if err != nil {
 		return nil, fmt.Errorf("cannot seek to last shape: %v", err)
@@ -183,16 +183,16 @@ func (w *Writer) Write(shape Shape) int32 {
 	}
 
 	w.num++
-	binary.Write(w.shp, binary.BigEndian, w.num)
-	w.shp.Seek(4, io.SeekCurrent)
+	_ = binary.Write(w.shp, binary.BigEndian, w.num)
+	_, _ = w.shp.Seek(4, io.SeekCurrent)
 	start, _ := w.shp.Seek(0, io.SeekCurrent)
-	binary.Write(w.shp, binary.LittleEndian, w.GeometryType)
+	_ = binary.Write(w.shp, binary.LittleEndian, w.GeometryType)
 	shape.write(w.shp)
 	finish, _ := w.shp.Seek(0, io.SeekCurrent)
 	length := int32(math.Floor((float64(finish) - float64(start)) / 2.0))
-	w.shp.Seek(start-4, io.SeekStart)
-	binary.Write(w.shp, binary.BigEndian, length)
-	w.shp.Seek(finish, io.SeekStart)
+	_, _ = w.shp.Seek(start-4, io.SeekStart)
+	_ = binary.Write(w.shp, binary.BigEndian, length)
+	_, _ = w.shp.Seek(finish, io.SeekStart)
 
 	// write shx
 	binary.Write(w.shx, binary.BigEndian, int32((start-8)/2))
@@ -212,14 +212,14 @@ func (w *Writer) Write(shape Shape) int32 {
 func (w *Writer) Close() {
 	w.writeHeader(w.shx)
 	w.writeHeader(w.shp)
-	w.shp.Close()
-	w.shx.Close()
+	_ = w.shp.Close()
+	_ = w.shx.Close()
 
 	if w.dbf == nil {
-		w.SetFields([]Field{})
+		_ = w.SetFields([]Field{})
 	}
 	w.writeDbfHeader(w.dbf)
-	w.dbf.Close()
+	_ = w.dbf.Close()
 }
 
 // writeHeader wrires SHP/SHX headers to ws.
@@ -228,50 +228,50 @@ func (w *Writer) writeHeader(ws io.WriteSeeker) {
 	if filelength == 0 {
 		filelength = 100
 	}
-	ws.Seek(0, io.SeekStart)
+	_, _ = ws.Seek(0, io.SeekStart)
 	// file code
-	binary.Write(ws, binary.BigEndian, []int32{9994, 0, 0, 0, 0, 0})
+	_ = binary.Write(ws, binary.BigEndian, []int32{9994, 0, 0, 0, 0, 0})
 	// file length
-	binary.Write(ws, binary.BigEndian, int32(filelength/2))
+	_ = binary.Write(ws, binary.BigEndian, int32(filelength/2))
 	// version and shape type
-	binary.Write(ws, binary.LittleEndian, []int32{1000, int32(w.GeometryType)})
+	_ = binary.Write(ws, binary.LittleEndian, []int32{1000, int32(w.GeometryType)})
 	// bounding box
-	binary.Write(ws, binary.LittleEndian, w.bbox)
+	_ = binary.Write(ws, binary.LittleEndian, w.bbox)
 	// elevation, measure
-	binary.Write(ws, binary.LittleEndian, []float64{0.0, 0.0, 0.0, 0.0})
+	_ = binary.Write(ws, binary.LittleEndian, []float64{0.0, 0.0, 0.0, 0.0})
 }
 
 // writeDbfHeader writes a DBF header to ws.
 func (w *Writer) writeDbfHeader(ws io.WriteSeeker) {
-	ws.Seek(0, 0)
+	_, _ = ws.Seek(0, 0)
 	// version, year (YEAR-1990), month, day
-	binary.Write(ws, binary.LittleEndian, []byte{3, 24, 5, 3})
+	_ = binary.Write(ws, binary.LittleEndian, []byte{3, 24, 5, 3})
 	// number of records
-	binary.Write(ws, binary.LittleEndian, w.num)
+	_ = binary.Write(ws, binary.LittleEndian, w.num)
 	// header length, record length
-	binary.Write(ws, binary.LittleEndian, []int16{w.dbfHeaderLength, w.dbfRecordLength})
+	_ = binary.Write(ws, binary.LittleEndian, []int16{w.dbfHeaderLength, w.dbfRecordLength})
 	// padding
-	binary.Write(ws, binary.LittleEndian, make([]byte, 20))
+	_ = binary.Write(ws, binary.LittleEndian, make([]byte, 20))
 
 	for _, field := range w.dbfFields {
-		binary.Write(ws, binary.LittleEndian, field)
+		_ = binary.Write(ws, binary.LittleEndian, field)
 	}
 
 	// end with return
-	ws.Write([]byte("\r"))
+	_, _ = ws.Write([]byte("\r"))
 }
 
 // SetFields sets field values in the DBF. This initializes the DBF file and
 // should be used prior to writing any attributes.
 func (w *Writer) SetFields(fields []Field) error {
 	if w.dbf != nil {
-		return errors.New("Cannot set fields in existing dbf")
+		return errors.New("cannot set fields in existing dbf")
 	}
 
 	var err error
 	w.dbf, err = os.Create(w.filename + ".dbf")
 	if err != nil {
-		return fmt.Errorf("Failed to open %s.dbf: %v", w.filename, err)
+		return fmt.Errorf("failed to open %s.dbf: %v", w.filename, err)
 	}
 	w.dbfFields = fields
 
@@ -286,7 +286,7 @@ func (w *Writer) SetFields(fields []Field) error {
 
 	// fill header space with empty bytes for now
 	buf := make([]byte, w.dbfHeaderLength)
-	binary.Write(w.dbf, binary.LittleEndian, buf)
+	_ = binary.Write(w.dbf, binary.LittleEndian, buf)
 
 	// write empty records
 	for n := int32(0); n < w.num; n++ {
@@ -300,10 +300,10 @@ func (w *Writer) SetFields(fields []Field) error {
 // dbfRecordLength number of bytes. The first byte is a
 // space that indicates a new record.
 func (w *Writer) writeEmptyRecord() {
-	w.dbf.Seek(0, io.SeekEnd)
+	_, _ = w.dbf.Seek(0, io.SeekEnd)
 	buf := make([]byte, w.dbfRecordLength)
 	buf[0] = ' '
-	binary.Write(w.dbf, binary.LittleEndian, buf)
+	_ = binary.Write(w.dbf, binary.LittleEndian, buf)
 }
 
 // WriteAttribute writes value for field into the given row in the DBF. Row
@@ -321,21 +321,21 @@ func (w *Writer) WriteAttribute(row int, field int, value interface{}) error {
 	case string:
 		buf = []byte(v)
 	default:
-		return fmt.Errorf("Unsupported value type: %T", v)
+		return fmt.Errorf("unsupported value type: %T", v)
 	}
 
 	if w.dbf == nil {
-		return errors.New("Initialize DBF by using SetFields first")
+		return errors.New("initialize DBF by using SetFields first")
 	}
 	if sz := int(w.dbfFields[field].Size); len(buf) > sz {
-		return fmt.Errorf("Unable to write field %v: %q exceeds field length %v", field, buf, sz)
+		return fmt.Errorf("unable to write field %v: %q exceeds field length %v", field, buf, sz)
 	}
 
 	seekTo := 1 + int64(w.dbfHeaderLength) + (int64(row) * int64(w.dbfRecordLength))
 	for n := 0; n < field; n++ {
 		seekTo += int64(w.dbfFields[n].Size)
 	}
-	w.dbf.Seek(seekTo, io.SeekStart)
+	_, _ = w.dbf.Seek(seekTo, io.SeekStart)
 	return binary.Write(w.dbf, binary.LittleEndian, buf)
 }
 

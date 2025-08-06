@@ -71,7 +71,7 @@ func OpenWithConfig(filename string, config *ReaderConfig, opts ...ReaderOption)
 	}
 
 	if err := s.readHeaders(); err != nil {
-		shp.Close()
+		_ = shp.Close()
 		return nil, err
 	}
 
@@ -91,22 +91,22 @@ func (r *Reader) readHeaders() error {
 	r.filelength, _ = r.shp.Seek(0, io.SeekEnd)
 
 	var filelength int32
-	r.shp.Seek(24, 0)
+	_, _ = r.shp.Seek(24, 0)
 	// file length
-	binary.Read(er, binary.BigEndian, &filelength)
-	r.shp.Seek(32, 0)
-	binary.Read(er, binary.LittleEndian, &r.GeometryType)
+	_ = binary.Read(er, binary.BigEndian, &filelength)
+	_, _ = r.shp.Seek(32, 0)
+	_ = binary.Read(er, binary.LittleEndian, &r.GeometryType)
 	r.bbox.MinX = readFloat64(er)
 	r.bbox.MinY = readFloat64(er)
 	r.bbox.MaxX = readFloat64(er)
 	r.bbox.MaxY = readFloat64(er)
-	r.shp.Seek(100, 0)
+	_, _ = r.shp.Seek(100, 0)
 	return er.e
 }
 
 func readFloat64(r io.Reader) float64 {
 	var bits uint64
-	binary.Read(r, binary.LittleEndian, &bits)
+	_ = binary.Read(r, binary.LittleEndian, &bits)
 	return math.Float64frombits(bits)
 }
 
@@ -115,7 +115,7 @@ func (r *Reader) Close() error {
 	if r.err == nil {
 		r.err = r.shp.Close()
 		if r.dbf != nil {
-			r.dbf.Close()
+			_ = r.dbf.Close()
 		}
 	}
 	return r.err
@@ -185,9 +185,9 @@ func (r *Reader) Next() bool {
 	var size int32
 	var shapetype ShapeType
 	er := &errReader{Reader: r.shp}
-	binary.Read(er, binary.BigEndian, &r.num)
-	binary.Read(er, binary.BigEndian, &size)
-	binary.Read(er, binary.LittleEndian, &shapetype)
+	_ = binary.Read(er, binary.BigEndian, &r.num)
+	_ = binary.Read(er, binary.BigEndian, &size)
+	_ = binary.Read(er, binary.LittleEndian, &shapetype)
 	if er.e != nil {
 		if er.e != io.EOF {
 			r.err = fmt.Errorf("Error when reading metadata of next shape: %v", er.e)
@@ -210,7 +210,7 @@ func (r *Reader) Next() bool {
 	}
 
 	// move to next object
-	r.shp.Seek(int64(size)*2+cur+8, 0)
+	_, _ = r.shp.Seek(int64(size)*2+cur+8, 0)
 	return true
 }
 
@@ -228,22 +228,22 @@ func (r *Reader) openDbf() (err error) {
 	}
 
 	// read header
-	r.dbf.Seek(4, io.SeekStart)
-	binary.Read(r.dbf, binary.LittleEndian, &r.dbfNumRecords)
-	binary.Read(r.dbf, binary.LittleEndian, &r.dbfHeaderLength)
-	binary.Read(r.dbf, binary.LittleEndian, &r.dbfRecordLength)
+	_, _ = r.dbf.Seek(4, io.SeekStart)
+	_ = binary.Read(r.dbf, binary.LittleEndian, &r.dbfNumRecords)
+	_ = binary.Read(r.dbf, binary.LittleEndian, &r.dbfHeaderLength)
+	_ = binary.Read(r.dbf, binary.LittleEndian, &r.dbfRecordLength)
 
-	r.dbf.Seek(20, io.SeekCurrent) // skip padding
+	_, _ = r.dbf.Seek(20, io.SeekCurrent) // skip padding
 	numFields := int(math.Floor(float64(r.dbfHeaderLength-33) / 32.0))
 	r.dbfFields = make([]Field, numFields)
-	binary.Read(r.dbf, binary.LittleEndian, &r.dbfFields)
+	_ = binary.Read(r.dbf, binary.LittleEndian, &r.dbfFields)
 	return
 }
 
 // Fields returns a slice of Fields that are present in the
 // DBF table.
 func (r *Reader) Fields() []Field {
-	r.openDbf() // make sure we have dbf file to read from
+	_ = r.openDbf() // make sure we have dbf file to read from
 	return r.dbfFields
 }
 
@@ -257,20 +257,20 @@ func (r *Reader) Err() error {
 
 // AttributeCount returns number of records in the DBF table.
 func (r *Reader) AttributeCount() int {
-	r.openDbf() // make sure we have a dbf file to read from
+	_ = r.openDbf() // make sure we have a dbf file to read from
 	return int(r.dbfNumRecords)
 }
 
 // ReadAttribute returns the attribute value at row for field in
 // the DBF table as a string. Both values starts at 0.
 func (r *Reader) ReadAttribute(row int, field int) string {
-	r.openDbf() // make sure we have a dbf file to read from
+	_ = r.openDbf() // make sure we have a dbf file to read from
 	seekTo := 1 + int64(r.dbfHeaderLength) + (int64(row) * int64(r.dbfRecordLength))
 	for n := 0; n < field; n++ {
 		seekTo += int64(r.dbfFields[n].Size)
 	}
-	r.dbf.Seek(seekTo, io.SeekStart)
+	_, _ = r.dbf.Seek(seekTo, io.SeekStart)
 	buf := make([]byte, r.dbfFields[field].Size)
-	r.dbf.Read(buf)
-	return strings.Trim(string(buf[:]), " ")
+	_, _ = r.dbf.Read(buf)
+	return strings.Trim(string(buf), " ")
 }

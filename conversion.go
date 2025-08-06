@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// ConvertShapefileToGeoJSON 将 Shapefile 转换为 GeoJSON 文件
+// ConvertShapefileToGeoJSON 将 Shapefile 转换为 GeoJSON 文件.
 func ConvertShapefileToGeoJSON(shapefilePath, geojsonPath string) error {
 	converter := GeoJSONConverter{}
 
@@ -24,7 +24,7 @@ func ConvertShapefileToGeoJSON(shapefilePath, geojsonPath string) error {
 	return nil
 }
 
-// ConvertGeoJSONToShapefile 将 GeoJSON 文件转换为 Shapefile
+// ConvertGeoJSONToShapefile 将 GeoJSON 文件转换为 Shapefile.
 func ConvertGeoJSONToShapefile(geojsonPath, shapefilePath string) error {
 	converter := GeoJSONConverter{}
 
@@ -41,7 +41,7 @@ func ConvertGeoJSONToShapefile(geojsonPath, shapefilePath string) error {
 	return nil
 }
 
-// ShapeToGeoJSONString 将单个 Shape 转换为 GeoJSON 字符串
+// ShapeToGeoJSONString 将单个 Shape 转换为 GeoJSON 字符串.
 func ShapeToGeoJSONString(shape Shape) (string, error) {
 	converter := GeoJSONConverter{}
 
@@ -65,7 +65,7 @@ func ShapeToGeoJSONString(shape Shape) (string, error) {
 	return string(data), nil
 }
 
-// BatchConvertShapefilesToGeoJSON 批量转换 Shapefile 到 GeoJSON
+// BatchConvertShapefilesToGeoJSON 批量转换 Shapefile 到 GeoJSON.
 func BatchConvertShapefilesToGeoJSON(inputDir, outputDir string) error {
 	// 查找所有 .shp 文件
 	shapefiles, err := filepath.Glob(filepath.Join(inputDir, "*.shp"))
@@ -91,7 +91,7 @@ func BatchConvertShapefilesToGeoJSON(inputDir, outputDir string) error {
 	return nil
 }
 
-// BatchConvertGeoJSONsToShapefiles 批量转换 GeoJSON 到 Shapefile
+// BatchConvertGeoJSONsToShapefiles 批量转换 GeoJSON 到 Shapefile.
 func BatchConvertGeoJSONsToShapefiles(inputDir, outputDir string) error {
 	// 查找所有 .geojson 文件
 	geojsonFiles, err := filepath.Glob(filepath.Join(inputDir, "*.geojson"))

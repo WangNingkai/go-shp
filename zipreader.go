@@ -20,10 +20,9 @@ func openFromZIP(z *zip.ReadCloser, name string) (io.ReadCloser, error) {
 	for _, f := range z.File {
 		if f.Name == name {
 			return f.Open()
-
 		}
 	}
-	return nil, fmt.Errorf("No such file in archive: %s", name)
+	return nil, fmt.Errorf("no such file in archive: %s", name)
 }
 
 // OpenZip opens a ZIP file that contains a single shapefile.
@@ -57,12 +56,12 @@ func OpenZip(zipFilePath string) (*ZipReader, error) {
 // ShapesInZip returns a string-slice with the names (i.e. relatives paths in
 // archive file tree) of all shapes that are in the ZIP archive at zipFilePath.
 func ShapesInZip(zipFilePath string) ([]string, error) {
-	var names []string
 	z, err := zip.OpenReader(zipFilePath)
 	if err != nil {
 		return nil, err
 	}
 	shapeFiles := shapesInZip(z)
+	names := make([]string, 0, len(shapeFiles))
 	for i := range shapeFiles {
 		names = append(names, shapeFiles[i].Name)
 	}
@@ -117,7 +116,7 @@ func (zr *ZipReader) Close() error {
 		s += err.Error() + ". "
 	}
 	if s != "" {
-		return fmt.Errorf(s)
+		return fmt.Errorf("%s", s)
 	}
 	return nil
 }

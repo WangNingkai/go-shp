@@ -1,3 +1,4 @@
+// Package main provides a command-line tool for converting between Shapefile and GeoJSON formats.
 package main
 
 import (
@@ -74,11 +75,12 @@ func handleSingleConversion(input, output string) {
 	if output == "" {
 		// 自动推断输出文件名
 		base := strings.TrimSuffix(input, filepath.Ext(input))
-		if ext == ".shp" {
+		switch ext {
+		case ".shp":
 			output = base + ".geojson"
-		} else if ext == ".geojson" {
+		case ".geojson":
 			output = base + ".shp"
-		} else {
+		default:
 			log.Fatalf("不支持的文件类型：%s", ext)
 		}
 	}
@@ -86,11 +88,12 @@ func handleSingleConversion(input, output string) {
 	fmt.Printf("转换 %s 到 %s...\n", input, output)
 
 	var err error
-	if ext == ".shp" {
+	switch ext {
+	case ".shp":
 		err = shp.ConvertShapefileToGeoJSON(input, output)
-	} else if ext == ".geojson" {
+	case ".geojson":
 		err = shp.ConvertGeoJSONToShapefile(input, output)
-	} else {
+	default:
 		log.Fatalf("不支持的输入文件类型：%s", ext)
 	}
 

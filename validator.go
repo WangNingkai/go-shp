@@ -118,10 +118,10 @@ func (v *DefaultValidator) validateMultiPartGeometry(numParts, numPoints int32, 
 	if numPoints < 0 {
 		return NewShapeError(ErrInvalidFormat, "negative number of points", nil)
 	}
-	if len := actualParts; len != int(numParts) {
+	if actualParts != int(numParts) {
 		return NewShapeError(ErrInvalidFormat, "parts array length mismatch", nil)
 	}
-	if len := actualPoints; len != int(numPoints) {
+	if actualPoints != int(numPoints) {
 		return NewShapeError(ErrInvalidFormat, "points array length mismatch", nil)
 	}
 	return nil

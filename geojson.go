@@ -133,7 +133,7 @@ func (c GeoJSONConverter) polyLineToGeoJSON(parts []int32, points []Point, zArra
 	}
 
 	// MultiLineString
-	var lineStrings []interface{}
+	lineStrings := make([]interface{}, 0, len(parts))
 	for i, part := range parts {
 		var endIdx int
 		if i+1 < len(parts) {
@@ -167,7 +167,7 @@ func (c GeoJSONConverter) polygonToGeoJSON(parts []int32, points []Point, zArray
 		return nil, fmt.Errorf("no parts in polygon")
 	}
 
-	var rings []interface{}
+	rings := make([]interface{}, 0, len(parts))
 	for i, part := range parts {
 		var endIdx int
 		if i+1 < len(parts) {
@@ -197,7 +197,7 @@ func (c GeoJSONConverter) polygonToGeoJSON(parts []int32, points []Point, zArray
 }
 
 // pointsToCoordinates converts points to coordinate arrays
-func (c GeoJSONConverter) pointsToCoordinates(points []Point, zArray, mArray []float64) [][]float64 {
+func (c GeoJSONConverter) pointsToCoordinates(points []Point, zArray, _ []float64) [][]float64 {
 	coords := make([][]float64, len(points))
 	for i, p := range points {
 		coord := []float64{p.X, p.Y}
@@ -229,7 +229,7 @@ func (c GeoJSONConverter) ShapefileToGeoJSON(filename string) (*GeoJSON, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	var features []*Feature
 	fields := reader.Fields()
@@ -283,10 +283,7 @@ func (c GeoJSONConverter) GeoJSONToShapefile(geoJSON *GeoJSON, filename string) 
 	defer writer.Close()
 
 	// Set up fields based on properties of the first feature
-	fields, err := c.createFieldsFromProperties(geoJSON.Features[0].Properties)
-	if err != nil {
-		return err
-	}
+	fields := c.createFieldsFromProperties(geoJSON.Features[0].Properties)
 	if err := writer.SetFields(fields); err != nil {
 		return err
 	}
@@ -304,7 +301,7 @@ func (c GeoJSONConverter) GeoJSONToShapefile(geoJSON *GeoJSON, filename string) 
 		for j, field := range fields {
 			fieldName := field.String()
 			if value, exists := feature.Properties[fieldName]; exists {
-				writer.WriteAttribute(int(row), j, value)
+				_ = writer.WriteAttribute(int(row), j, value)
 			}
 		}
 	}
@@ -329,7 +326,7 @@ func (c GeoJSONConverter) determineShapeType(geom *Geometry) (ShapeType, error) 
 }
 
 // createFieldsFromProperties creates DBF fields from GeoJSON properties
-func (c GeoJSONConverter) createFieldsFromProperties(properties map[string]interface{}) ([]Field, error) {
+func (c GeoJSONConverter) createFieldsFromProperties(properties map[string]interface{}) []Field {
 	var fields []Field
 
 	for name, value := range properties {
@@ -355,11 +352,11 @@ func (c GeoJSONConverter) createFieldsFromProperties(properties map[string]inter
 		}
 	}
 
-	return fields, nil
+	return fields
 }
 
 // GeoJSONToShape converts a GeoJSON geometry to a Shape
-func (c GeoJSONConverter) GeoJSONToShape(geom *Geometry, expectedType ShapeType) (Shape, error) {
+func (c GeoJSONConverter) GeoJSONToShape(geom *Geometry, _ ShapeType) (Shape, error) {
 	switch geom.Type {
 	case "Point":
 		coords, ok := geom.Coordinates.([]interface{})
@@ -555,7 +552,7 @@ func writeFile(filename string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	_, err = file.Write(data)
 	return err
@@ -568,7 +565,7 @@ func readFile(filename string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var data []byte
 	buf := make([]byte, 1024)

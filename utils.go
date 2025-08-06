@@ -167,7 +167,7 @@ func (StatisticsUtils) AnalyzeShapefile(filename string) (*ShapefileStats, error
 	if err != nil {
 		return nil, err
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	stats := &ShapefileStats{
 		ShapeTypes:     make(map[ShapeType]int),

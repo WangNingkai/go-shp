@@ -5,15 +5,15 @@ import (
 	"fmt"
 )
 
-// ErrType 定义错误类型
+// ErrType 定义错误类型.
 type ErrType int
 
 const (
-	// ErrInvalidFormat 无效的文件格式
+	// ErrInvalidFormat 无效的文件格式.
 	ErrInvalidFormat ErrType = iota + 1
-	// ErrCorruptedFile 文件损坏
+	// ErrCorruptedFile 文件损坏.
 	ErrCorruptedFile
-	// ErrUnsupportedType 不支持的类型
+	// ErrUnsupportedType 不支持的类型.
 	ErrUnsupportedType
 	// ErrInvalidField 无效的字段
 	ErrInvalidField

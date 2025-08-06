@@ -82,8 +82,7 @@ type Shape interface {
 }
 
 // Null is an empty shape.
-type Null struct {
-}
+type Null struct{}
 
 // BBox Returns an empty BBox at the geometry origin.
 func (n Null) BBox() Box {
@@ -95,7 +94,7 @@ func (n *Null) read(file io.Reader) {
 }
 
 func (n *Null) write(file io.Writer) {
-	binary.Write(file, binary.LittleEndian, n)
+	_ = binary.Write(file, binary.LittleEndian, n)
 }
 
 // Point is the shape that consists of single a geometry point.
@@ -114,7 +113,7 @@ func (p *Point) read(file io.Reader) {
 }
 
 func (p *Point) write(file io.Writer) {
-	binary.Write(file, binary.LittleEndian, p)
+	_ = binary.Write(file, binary.LittleEndian, p)
 }
 
 func flatten(points [][]Point) []Point {
@@ -181,11 +180,11 @@ func (p *PolyLine) read(file io.Reader) {
 }
 
 func (p *PolyLine) write(file io.Writer) {
-	binary.Write(file, binary.LittleEndian, p.Box)
-	binary.Write(file, binary.LittleEndian, p.NumParts)
-	binary.Write(file, binary.LittleEndian, p.NumPoints)
-	binary.Write(file, binary.LittleEndian, p.Parts)
-	binary.Write(file, binary.LittleEndian, p.Points)
+	_ = binary.Write(file, binary.LittleEndian, p.Box)
+	_ = binary.Write(file, binary.LittleEndian, p.NumParts)
+	_ = binary.Write(file, binary.LittleEndian, p.NumPoints)
+	_ = binary.Write(file, binary.LittleEndian, p.Parts)
+	_ = binary.Write(file, binary.LittleEndian, p.Points)
 }
 
 // Polygon is identical to the PolyLine struct. However the parts must form
@@ -208,11 +207,11 @@ func (p *Polygon) read(file io.Reader) {
 }
 
 func (p *Polygon) write(file io.Writer) {
-	binary.Write(file, binary.LittleEndian, p.Box)
-	binary.Write(file, binary.LittleEndian, p.NumParts)
-	binary.Write(file, binary.LittleEndian, p.NumPoints)
-	binary.Write(file, binary.LittleEndian, p.Parts)
-	binary.Write(file, binary.LittleEndian, p.Points)
+	_ = binary.Write(file, binary.LittleEndian, p.Box)
+	_ = binary.Write(file, binary.LittleEndian, p.NumParts)
+	_ = binary.Write(file, binary.LittleEndian, p.NumPoints)
+	_ = binary.Write(file, binary.LittleEndian, p.Parts)
+	_ = binary.Write(file, binary.LittleEndian, p.Points)
 }
 
 // MultiPoint is the shape that consists of multiple points.
@@ -235,9 +234,9 @@ func (p *MultiPoint) read(file io.Reader) {
 }
 
 func (p *MultiPoint) write(file io.Writer) {
-	binary.Write(file, binary.LittleEndian, p.Box)
-	binary.Write(file, binary.LittleEndian, p.NumPoints)
-	binary.Write(file, binary.LittleEndian, p.Points)
+	_ = binary.Write(file, binary.LittleEndian, p.Box)
+	_ = binary.Write(file, binary.LittleEndian, p.NumPoints)
+	_ = binary.Write(file, binary.LittleEndian, p.Points)
 }
 
 // PointZ is a triplet of double precision coordinates plus a measure.
@@ -259,7 +258,7 @@ func (p *PointZ) read(file io.Reader) {
 }
 
 func (p *PointZ) write(file io.Writer) {
-	binary.Write(file, binary.LittleEndian, p)
+	_ = binary.Write(file, binary.LittleEndian, p)
 }
 
 // PolyLineZ is a shape which consists of one or more parts. A part is a
@@ -299,15 +298,15 @@ func (p *PolyLineZ) read(file io.Reader) {
 }
 
 func (p *PolyLineZ) write(file io.Writer) {
-	binary.Write(file, binary.LittleEndian, p.Box)
-	binary.Write(file, binary.LittleEndian, p.NumParts)
-	binary.Write(file, binary.LittleEndian, p.NumPoints)
-	binary.Write(file, binary.LittleEndian, p.Parts)
-	binary.Write(file, binary.LittleEndian, p.Points)
-	binary.Write(file, binary.LittleEndian, p.ZRange)
-	binary.Write(file, binary.LittleEndian, p.ZArray)
-	binary.Write(file, binary.LittleEndian, p.MRange)
-	binary.Write(file, binary.LittleEndian, p.MArray)
+	_ = binary.Write(file, binary.LittleEndian, p.Box)
+	_ = binary.Write(file, binary.LittleEndian, p.NumParts)
+	_ = binary.Write(file, binary.LittleEndian, p.NumPoints)
+	_ = binary.Write(file, binary.LittleEndian, p.Parts)
+	_ = binary.Write(file, binary.LittleEndian, p.Points)
+	_ = binary.Write(file, binary.LittleEndian, p.ZRange)
+	_ = binary.Write(file, binary.LittleEndian, p.ZArray)
+	_ = binary.Write(file, binary.LittleEndian, p.MRange)
+	_ = binary.Write(file, binary.LittleEndian, p.MArray)
 }
 
 // PolygonZ structure is identical to the PolyLineZ structure.
@@ -335,15 +334,15 @@ func (p *PolygonZ) read(file io.Reader) {
 }
 
 func (p *PolygonZ) write(file io.Writer) {
-	binary.Write(file, binary.LittleEndian, p.Box)
-	binary.Write(file, binary.LittleEndian, p.NumParts)
-	binary.Write(file, binary.LittleEndian, p.NumPoints)
-	binary.Write(file, binary.LittleEndian, p.Parts)
-	binary.Write(file, binary.LittleEndian, p.Points)
-	binary.Write(file, binary.LittleEndian, p.ZRange)
-	binary.Write(file, binary.LittleEndian, p.ZArray)
-	binary.Write(file, binary.LittleEndian, p.MRange)
-	binary.Write(file, binary.LittleEndian, p.MArray)
+	_ = binary.Write(file, binary.LittleEndian, p.Box)
+	_ = binary.Write(file, binary.LittleEndian, p.NumParts)
+	_ = binary.Write(file, binary.LittleEndian, p.NumPoints)
+	_ = binary.Write(file, binary.LittleEndian, p.Parts)
+	_ = binary.Write(file, binary.LittleEndian, p.Points)
+	_ = binary.Write(file, binary.LittleEndian, p.ZRange)
+	_ = binary.Write(file, binary.LittleEndian, p.ZArray)
+	_ = binary.Write(file, binary.LittleEndian, p.MRange)
+	_ = binary.Write(file, binary.LittleEndian, p.MArray)
 }
 
 // MultiPointZ consists of one ore more PointZ.

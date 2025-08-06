@@ -1,33 +1,31 @@
+version: 2
+
 run:
   timeout: 5m
-  go: "1.19"
 
 linters:
   enable:
+    # 默认启用的linters
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
     - unused
-    - varcheck
-    - structcheck
-    - deadcode
+
+    # 额外启用的linters
     - gocyclo
-    - gofmt
-    - goimports
+    - gochecknoglobals
     - misspell
     - unparam
     - unconvert
     - goconst
-    - gofumpt
     - prealloc
     - predeclared
     - revive
-    - exportloopref
     - nilerr
     - nolintlint
+    - godot
+    - gocritic
 
 linters-settings:
   gocyclo:
@@ -52,8 +50,8 @@ issues:
       linters:
         - gocyclo
         - errcheck
-        - dupl
         - gosec
+        - gochecknoglobals
     - linters:
         - staticcheck
       text: "SA9003:"

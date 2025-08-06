@@ -3,7 +3,6 @@ package shp
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"testing"
 )
 
@@ -491,7 +490,7 @@ func newReadSeekCloser(b []byte) readSeekCloser {
 		io.Closer
 		io.ReadSeeker
 	}{
-		ioutil.NopCloser(nil),
+		io.NopCloser(nil),
 		bytes.NewReader(b),
 	}
 }

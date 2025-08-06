@@ -3,7 +3,6 @@ package shp
 import (
 	"archive/zip"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -29,7 +28,7 @@ func compressFileToZIP(zw *zip.Writer, src, tgt string, t *testing.T) {
 // createTempZIP packs the SHP, SHX, and DBF into a ZIP in a temporary
 // directory
 func createTempZIP(prefix string, t *testing.T) (dir, filename string) {
-	dir, err := ioutil.TempDir("", "go-shp-test")
+	dir, err := os.MkdirTemp("", "go-shp-test")
 	if err != nil {
 		t.Fatalf("Could not create temporary directory: %v", err)
 	}
@@ -78,7 +77,7 @@ func TestZipReader(t *testing.T) {
 }
 
 func unzipToTempDir(t *testing.T, p string) string {
-	td, err := ioutil.TempDir("", "")
+	td, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}

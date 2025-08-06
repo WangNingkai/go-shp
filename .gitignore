@@ -10,3 +10,5 @@ bin/
 **/.DS_Store
 main
 example
+output.*
+build/

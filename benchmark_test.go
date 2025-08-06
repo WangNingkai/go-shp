@@ -1,6 +1,7 @@
 package shp
 
 import (
+	"os"
 	"testing"
 )
 
@@ -159,4 +160,40 @@ func BenchmarkMemoryUsage(b *testing.B) {
 		reader.Close()
 		_ = shapes // 防止编译器优化
 	}
+}
+
+// setupTestShapefile 创建测试用的 shapefile（通用函数）
+func setupTestShapefile(filename string, pointCount int) error {
+	writer, err := Create(filename, POINT)
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
+
+	// 设置字段
+	fields := []Field{
+		StringField("NAME", 20),
+		NumberField("ID", 10),
+	}
+	if err := writer.SetFields(fields); err != nil {
+		return err
+	}
+
+	// 添加测试点
+	for i := 0; i < pointCount; i++ {
+		point := &Point{X: float64(i), Y: float64(i * 2)}
+		row := writer.Write(point)
+		writer.WriteAttribute(int(row), 0, "Point")
+		writer.WriteAttribute(int(row), 1, i)
+	}
+
+	return nil
+}
+
+// cleanupTestShapefile 清理测试文件
+func cleanupTestShapefile(filename string) {
+	base := filename[:len(filename)-4] // 去掉 .shp
+	os.Remove(base + ".shp")
+	os.Remove(base + ".shx")
+	os.Remove(base + ".dbf")
 }

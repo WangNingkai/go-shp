@@ -123,7 +123,9 @@ func douglasPeucker(points []Point, tolerance float64) []Point {
 func pointToLineDistance(point, lineStart, lineEnd Point) float64 {
 	// 如果线段长度为0，返回点到起点的距离
 	if lineStart.X == lineEnd.X && lineStart.Y == lineEnd.Y {
-		return math.Sqrt(math.Pow(point.X-lineStart.X, 2) + math.Pow(point.Y-lineStart.Y, 2))
+		dx := point.X - lineStart.X
+		dy := point.Y - lineStart.Y
+		return math.Sqrt(dx*dx + dy*dy)
 	}
 
 	// 计算点到直线的距离
@@ -197,7 +199,7 @@ func (StatisticsUtils) AnalyzeShapefile(filename string) (*ShapefileStats, error
 		stats.TotalShapes++
 
 		// 统计形状类型
-		switch shape.(type) {
+		switch s := shape.(type) {
 		case *Point:
 			stats.ShapeTypes[POINT]++
 		case *PolyLine:
@@ -205,17 +207,15 @@ func (StatisticsUtils) AnalyzeShapefile(filename string) (*ShapefileStats, error
 		case *Polygon:
 			stats.ShapeTypes[POLYGON]++
 			// 计算面积
-			if pg, ok := shape.(*Polygon); ok {
-				area := utils.Area(pg.Points)
-				totalArea += area
-				if area > largestArea {
-					largestArea = area
-					largestIndex = index
-				}
-				if area < smallestArea {
-					smallestArea = area
-					smallestIndex = index
-				}
+			area := utils.Area(s.Points)
+			totalArea += area
+			if area > largestArea {
+				largestArea = area
+				largestIndex = index
+			}
+			if area < smallestArea {
+				smallestArea = area
+				smallestIndex = index
 			}
 		case *MultiPoint:
 			stats.ShapeTypes[MULTIPOINT]++
@@ -277,7 +277,7 @@ func (StatisticsUtils) AnalyzeShapefile(filename string) (*ShapefileStats, error
 func (s *ShapefileStats) String() string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("Shapefile Statistics:\n"))
+	sb.WriteString("Shapefile Statistics:\n")
 	sb.WriteString(fmt.Sprintf("  Total Shapes: %d\n", s.TotalShapes))
 	sb.WriteString(fmt.Sprintf("  Bounding Box: [%.6f, %.6f, %.6f, %.6f]\n",
 		s.BoundingBox.MinX, s.BoundingBox.MinY, s.BoundingBox.MaxX, s.BoundingBox.MaxY))
@@ -321,17 +321,11 @@ func (FormatUtils) ToGeoJSON(shape Shape) string {
 	case *Point:
 		return fmt.Sprintf(`{"type":"Point","coordinates":[%.6f,%.6f]}`, s.X, s.Y)
 	case *PolyLine:
-		coords := make([]string, len(s.Points))
-		for i, p := range s.Points {
-			coords[i] = fmt.Sprintf("[%.6f,%.6f]", p.X, p.Y)
-		}
-		return fmt.Sprintf(`{"type":"LineString","coordinates":[%s]}`, strings.Join(coords, ","))
+		coords := formatPointsAsJSON(s.Points)
+		return fmt.Sprintf(`{"type":"LineString","coordinates":[%s]}`, coords)
 	case *Polygon:
-		coords := make([]string, len(s.Points))
-		for i, p := range s.Points {
-			coords[i] = fmt.Sprintf("[%.6f,%.6f]", p.X, p.Y)
-		}
-		return fmt.Sprintf(`{"type":"Polygon","coordinates":[[%s]]}`, strings.Join(coords, ","))
+		coords := formatPointsAsJSON(s.Points)
+		return fmt.Sprintf(`{"type":"Polygon","coordinates":[[%s]]}`, coords)
 	default:
 		return `{"type":"Feature","geometry":null}`
 	}
@@ -343,18 +337,30 @@ func (FormatUtils) ToWKT(shape Shape) string {
 	case *Point:
 		return fmt.Sprintf("POINT (%.6f %.6f)", s.X, s.Y)
 	case *PolyLine:
-		coords := make([]string, len(s.Points))
-		for i, p := range s.Points {
-			coords[i] = fmt.Sprintf("%.6f %.6f", p.X, p.Y)
-		}
-		return fmt.Sprintf("LINESTRING (%s)", strings.Join(coords, ", "))
+		coords := formatPointsAsWKT(s.Points)
+		return fmt.Sprintf("LINESTRING (%s)", coords)
 	case *Polygon:
-		coords := make([]string, len(s.Points))
-		for i, p := range s.Points {
-			coords[i] = fmt.Sprintf("%.6f %.6f", p.X, p.Y)
-		}
-		return fmt.Sprintf("POLYGON ((%s))", strings.Join(coords, ", "))
+		coords := formatPointsAsWKT(s.Points)
+		return fmt.Sprintf("POLYGON ((%s))", coords)
 	default:
 		return "GEOMETRYCOLLECTION EMPTY"
 	}
+}
+
+// formatPointsAsJSON 格式化点数组为JSON坐标格式
+func formatPointsAsJSON(points []Point) string {
+	coords := make([]string, len(points))
+	for i, p := range points {
+		coords[i] = fmt.Sprintf("[%.6f,%.6f]", p.X, p.Y)
+	}
+	return strings.Join(coords, ",")
+}
+
+// formatPointsAsWKT 格式化点数组为WKT坐标格式
+func formatPointsAsWKT(points []Point) string {
+	coords := make([]string, len(points))
+	for i, p := range points {
+		coords[i] = fmt.Sprintf("%.6f %.6f", p.X, p.Y)
+	}
+	return strings.Join(coords, ", ")
 }

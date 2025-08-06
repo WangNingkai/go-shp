@@ -77,28 +77,26 @@ func (v *DefaultValidator) validateBBox(bbox Box) error {
 
 // validatePoint 验证点
 func (v *DefaultValidator) validatePoint(p *Point) error {
-	if math.IsNaN(p.X) || math.IsNaN(p.Y) {
-		return NewShapeError(ErrInvalidFormat, "point contains NaN coordinates", nil)
-	}
-	if math.IsInf(p.X, 0) || math.IsInf(p.Y, 0) {
-		return NewShapeError(ErrInvalidFormat, "point contains infinite coordinates", nil)
+	return v.validatePointValues([]float64{p.X, p.Y}, "point")
+}
+
+// validatePointValues 验证点的坐标值
+func (v *DefaultValidator) validatePointValues(values []float64, pointType string) error {
+	for _, val := range values {
+		if math.IsNaN(val) {
+			return NewShapeError(ErrInvalidFormat, fmt.Sprintf("%s contains NaN values", pointType), nil)
+		}
+		if math.IsInf(val, 0) {
+			return NewShapeError(ErrInvalidFormat, fmt.Sprintf("%s contains infinite values", pointType), nil)
+		}
 	}
 	return nil
 }
 
 // validatePolyLine 验证多线
 func (v *DefaultValidator) validatePolyLine(pl *PolyLine) error {
-	if pl.NumParts < 0 {
-		return NewShapeError(ErrInvalidFormat, "negative number of parts", nil)
-	}
-	if pl.NumPoints < 0 {
-		return NewShapeError(ErrInvalidFormat, "negative number of points", nil)
-	}
-	if len(pl.Parts) != int(pl.NumParts) {
-		return NewShapeError(ErrInvalidFormat, "parts array length mismatch", nil)
-	}
-	if len(pl.Points) != int(pl.NumPoints) {
-		return NewShapeError(ErrInvalidFormat, "points array length mismatch", nil)
+	if err := v.validateMultiPartGeometry(pl.NumParts, pl.NumPoints, len(pl.Parts), len(pl.Points)); err != nil {
+		return err
 	}
 
 	// 验证每个点
@@ -109,6 +107,33 @@ func (v *DefaultValidator) validatePolyLine(pl *PolyLine) error {
 		}
 	}
 
+	return nil
+}
+
+// validateMultiPartGeometry 验证多部分几何的基本结构
+func (v *DefaultValidator) validateMultiPartGeometry(numParts, numPoints int32, actualParts, actualPoints int) error {
+	if numParts < 0 {
+		return NewShapeError(ErrInvalidFormat, "negative number of parts", nil)
+	}
+	if numPoints < 0 {
+		return NewShapeError(ErrInvalidFormat, "negative number of points", nil)
+	}
+	if len := actualParts; len != int(numParts) {
+		return NewShapeError(ErrInvalidFormat, "parts array length mismatch", nil)
+	}
+	if len := actualPoints; len != int(numPoints) {
+		return NewShapeError(ErrInvalidFormat, "points array length mismatch", nil)
+	}
+	return nil
+}
+
+// validateArrayLengths 验证数组长度匹配
+func (v *DefaultValidator) validateArrayLengths(expectedLen int, actualLens []int, arrayNames []string) error {
+	for i, actualLen := range actualLens {
+		if actualLen != expectedLen {
+			return NewShapeError(ErrInvalidFormat, fmt.Sprintf("%s array length mismatch", arrayNames[i]), nil)
+		}
+	}
 	return nil
 }
 
@@ -139,37 +164,15 @@ func (v *DefaultValidator) validateMultiPoint(mp *MultiPoint) error {
 
 // validatePointZ 验证Z点
 func (v *DefaultValidator) validatePointZ(p *PointZ) error {
-	if math.IsNaN(p.X) || math.IsNaN(p.Y) || math.IsNaN(p.Z) || math.IsNaN(p.M) {
-		return NewShapeError(ErrInvalidFormat, "pointZ contains NaN values", nil)
-	}
-	if math.IsInf(p.X, 0) || math.IsInf(p.Y, 0) || math.IsInf(p.Z, 0) || math.IsInf(p.M, 0) {
-		return NewShapeError(ErrInvalidFormat, "pointZ contains infinite values", nil)
-	}
-	return nil
+	return v.validatePointValues([]float64{p.X, p.Y, p.Z, p.M}, "pointZ")
 }
 
 // validatePolyLineZ 验证Z多线
 func (v *DefaultValidator) validatePolyLineZ(plz *PolyLineZ) error {
-	if plz.NumParts < 0 {
-		return NewShapeError(ErrInvalidFormat, "negative number of parts", nil)
+	if err := v.validateMultiPartGeometry(plz.NumParts, plz.NumPoints, len(plz.Parts), len(plz.Points)); err != nil {
+		return err
 	}
-	if plz.NumPoints < 0 {
-		return NewShapeError(ErrInvalidFormat, "negative number of points", nil)
-	}
-	if len(plz.Parts) != int(plz.NumParts) {
-		return NewShapeError(ErrInvalidFormat, "parts array length mismatch", nil)
-	}
-	if len(plz.Points) != int(plz.NumPoints) {
-		return NewShapeError(ErrInvalidFormat, "points array length mismatch", nil)
-	}
-	if len(plz.ZArray) != int(plz.NumPoints) {
-		return NewShapeError(ErrInvalidFormat, "Z array length mismatch", nil)
-	}
-	if len(plz.MArray) != int(plz.NumPoints) {
-		return NewShapeError(ErrInvalidFormat, "M array length mismatch", nil)
-	}
-
-	return nil
+	return v.validateArrayLengths(int(plz.NumPoints), []int{len(plz.ZArray), len(plz.MArray)}, []string{"Z", "M"})
 }
 
 // validatePolygonZ 验证Z多边形
@@ -186,46 +189,20 @@ func (v *DefaultValidator) validateMultiPointZ(mpz *MultiPointZ) error {
 	if len(mpz.Points) != int(mpz.NumPoints) {
 		return NewShapeError(ErrInvalidFormat, "points array length mismatch", nil)
 	}
-	if len(mpz.ZArray) != int(mpz.NumPoints) {
-		return NewShapeError(ErrInvalidFormat, "Z array length mismatch", nil)
-	}
-	if len(mpz.MArray) != int(mpz.NumPoints) {
-		return NewShapeError(ErrInvalidFormat, "M array length mismatch", nil)
-	}
-
-	return nil
+	return v.validateArrayLengths(int(mpz.NumPoints), []int{len(mpz.ZArray), len(mpz.MArray)}, []string{"Z", "M"})
 }
 
 // validatePointM 验证M点
 func (v *DefaultValidator) validatePointM(p *PointM) error {
-	if math.IsNaN(p.X) || math.IsNaN(p.Y) || math.IsNaN(p.M) {
-		return NewShapeError(ErrInvalidFormat, "pointM contains NaN values", nil)
-	}
-	if math.IsInf(p.X, 0) || math.IsInf(p.Y, 0) || math.IsInf(p.M, 0) {
-		return NewShapeError(ErrInvalidFormat, "pointM contains infinite values", nil)
-	}
-	return nil
+	return v.validatePointValues([]float64{p.X, p.Y, p.M}, "pointM")
 }
 
 // validatePolyLineM 验证M多线
 func (v *DefaultValidator) validatePolyLineM(plm *PolyLineM) error {
-	if plm.NumParts < 0 {
-		return NewShapeError(ErrInvalidFormat, "negative number of parts", nil)
+	if err := v.validateMultiPartGeometry(plm.NumParts, plm.NumPoints, len(plm.Parts), len(plm.Points)); err != nil {
+		return err
 	}
-	if plm.NumPoints < 0 {
-		return NewShapeError(ErrInvalidFormat, "negative number of points", nil)
-	}
-	if len(plm.Parts) != int(plm.NumParts) {
-		return NewShapeError(ErrInvalidFormat, "parts array length mismatch", nil)
-	}
-	if len(plm.Points) != int(plm.NumPoints) {
-		return NewShapeError(ErrInvalidFormat, "points array length mismatch", nil)
-	}
-	if len(plm.MArray) != int(plm.NumPoints) {
-		return NewShapeError(ErrInvalidFormat, "M array length mismatch", nil)
-	}
-
-	return nil
+	return v.validateArrayLengths(int(plm.NumPoints), []int{len(plm.MArray)}, []string{"M"})
 }
 
 // validatePolygonM 验证M多边形
@@ -242,36 +219,16 @@ func (v *DefaultValidator) validateMultiPointM(mpm *MultiPointM) error {
 	if len(mpm.Points) != int(mpm.NumPoints) {
 		return NewShapeError(ErrInvalidFormat, "points array length mismatch", nil)
 	}
-	if len(mpm.MArray) != int(mpm.NumPoints) {
-		return NewShapeError(ErrInvalidFormat, "M array length mismatch", nil)
-	}
-
-	return nil
+	return v.validateArrayLengths(int(mpm.NumPoints), []int{len(mpm.MArray)}, []string{"M"})
 }
 
 // validateMultiPatch 验证多面体
 func (v *DefaultValidator) validateMultiPatch(mp *MultiPatch) error {
-	if mp.NumParts < 0 {
-		return NewShapeError(ErrInvalidFormat, "negative number of parts", nil)
-	}
-	if mp.NumPoints < 0 {
-		return NewShapeError(ErrInvalidFormat, "negative number of points", nil)
-	}
-	if len(mp.Parts) != int(mp.NumParts) {
-		return NewShapeError(ErrInvalidFormat, "parts array length mismatch", nil)
+	if err := v.validateMultiPartGeometry(mp.NumParts, mp.NumPoints, len(mp.Parts), len(mp.Points)); err != nil {
+		return err
 	}
 	if len(mp.PartTypes) != int(mp.NumParts) {
 		return NewShapeError(ErrInvalidFormat, "part types array length mismatch", nil)
 	}
-	if len(mp.Points) != int(mp.NumPoints) {
-		return NewShapeError(ErrInvalidFormat, "points array length mismatch", nil)
-	}
-	if len(mp.ZArray) != int(mp.NumPoints) {
-		return NewShapeError(ErrInvalidFormat, "Z array length mismatch", nil)
-	}
-	if len(mp.MArray) != int(mp.NumPoints) {
-		return NewShapeError(ErrInvalidFormat, "M array length mismatch", nil)
-	}
-
-	return nil
+	return v.validateArrayLengths(int(mp.NumPoints), []int{len(mp.ZArray), len(mp.MArray)}, []string{"Z", "M"})
 }

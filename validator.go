@@ -207,8 +207,8 @@ func (v *DefaultValidator) validatePolyLineM(plm *PolyLineM) error {
 
 // validatePolygonM 验证M多边形
 func (v *DefaultValidator) validatePolygonM(pgm *PolygonM) error {
-	plz := (*PolyLineZ)(pgm)
-	return v.validatePolyLineZ(plz)
+	plm := (*PolyLineM)(pgm)
+	return v.validatePolyLineM(plm)
 }
 
 // validateMultiPointM 验证M多点

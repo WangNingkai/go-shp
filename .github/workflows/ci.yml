@@ -81,11 +81,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.1.0
-          args: --timeout=10m 
-          skip-cache: true # 暂时禁用缓存避免冲突
-          only-new-issues: false
-          install-mode: binary
+          version: v2.3.0
 
   benchmark:
     runs-on: ubuntu-latest

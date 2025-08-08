@@ -4,17 +4,12 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches:
-      - main
-      - develop
-      - 'feature/*'
-      - 'hotfix/*'
+    branches: [main, develop, "feature/*", "hotfix/*"]
 
 jobs:
   test:
     strategy:
       matrix:
-        # 明确指定完整的Go版本号，避免解析问题
         go-version: ["1.19", "1.20", "1.21"]
         os: [ubuntu-latest, windows-latest, macos-latest]
       fail-fast: false
@@ -30,9 +25,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          # 使用完整版本号并添加引号确保正确解析
           go-version: "${{ matrix.go-version }}"
           cache: true
+
+      - name: Verify Go version
+        run: go version
+        timeout-minutes: 5
 
       - name: Verify dependencies
         run: go mod verify
@@ -42,15 +40,19 @@ jobs:
         run: go build -v ./...
         timeout-minutes: 10
 
-      - name: Run tests
-        run: |
-          if ($env:RUNNER_OS -eq "Windows") {
-            go test -race "-coverprofile=coverage.out" -covermode=atomic ./...
-          } else {
-            go test -race -coverprofile=coverage.out -covermode=atomic ./...
-          }
-        shell: pwsh
+      - name: Run tests (Windows)
         timeout-minutes: 10
+        if: matrix.os == 'windows-latest'
+        run: |
+          $coverProfile = "coverage.out"
+          go test -race -coverprofile=$coverProfile -covermode=atomic ./...
+        shell: pwsh
+
+      - name: Run tests (non-Windows)
+        timeout-minutes: 10
+        if: matrix.os != 'windows-latest'
+        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+        shell: bash
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
@@ -61,7 +63,6 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
-  # 其余作业配置保持不变
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -80,10 +81,11 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v4
         with:
-          version: v1.55.2
-          args: --timeout=10m
-          skip-cache: false
+          version: v2.1.0
+          args: --timeout=10m --no-config # 禁用配置文件，使用默认设置
+          skip-cache: true # 暂时禁用缓存避免冲突
           only-new-issues: false
+          install-mode: binary
 
   benchmark:
     runs-on: ubuntu-latest

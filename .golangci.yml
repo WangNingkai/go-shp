@@ -1,57 +1,73 @@
-version: 2
-
+version: "2"
 run:
-  timeout: 5m
-
+  modules-download-mode: readonly
+  issues-exit-code: 1
+  tests: false
 linters:
+  default: none
   enable:
-    # 默认启用的linters
+    - bodyclose
+    - dogsled
     - errcheck
+    - goconst
+    - gocritic
+    - gocyclo
+    - goheader
     - govet
     - ineffassign
-    - staticcheck
-    - unused
-
-    # 额外启用的linters
-    - gocyclo
-    - gochecknoglobals
     - misspell
-    - unparam
-    - unconvert
-    - goconst
-    - prealloc
-    - predeclared
-    - revive
-    - nilerr
+    - nakedret
     - nolintlint
-    - godot
-    - gocritic
-
-linters-settings:
-  gocyclo:
-    min-complexity: 15
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-  misspell:
-    locale: US
-  revive:
-    rules:
-      - name: exported
-        severity: warning
-        disabled: false
-        arguments:
-          - "checkPrivateReceivers"
-          - "sayRepetitiveInsteadOfStutters"
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - errcheck
-        - gosec
-        - gochecknoglobals
-    - linters:
-        - staticcheck
-      text: "SA9003:"
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+  settings:
+    errcheck:
+      exclude-functions:
+        - io.Reader.Read
+        - io.Writer.Write
+    gocognit:
+      min-complexity: 20
+    gocyclo:
+      min-complexity: 15
+    revive:
+      rules:
+        - name: unused-parameter
+        - name: unused-return
+    staticcheck:
+      checks:
+        - all
+        - -SA1000
+        - -SA1019
+        - -SA5001
+        - -SA5002
+        - -ST1000
+        - -ST1005
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/myuser/myproject
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

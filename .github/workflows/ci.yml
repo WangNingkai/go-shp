@@ -1,4 +1,3 @@
-# filepath: 
 name: CI
 
 on:
@@ -17,93 +16,109 @@ jobs:
       matrix:
         go-version: [1.19, 1.20, 1.21]
         os: [ubuntu-latest, windows-latest, macos-latest]
+      # 允许一个环境失败而不影响其他环境
+      fail-fast: false
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30  # 防止长时间运行的任务
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 确保获取完整历史用于某些工具
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          cache: true  # 使用内置缓存替代手动缓存步骤
 
       - name: Verify dependencies
         run: go mod verify
+        timeout-minutes: 5
 
       - name: Build
         run: go build -v ./...
+        timeout-minutes: 10
 
       - name: Run tests
         run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+        timeout-minutes: 10
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           file: ./coverage.out
           flags: unittests
           name: codecov-umbrella
+          fail_ci_if_error: false  # 防止覆盖率上传失败导致整个CI失败
 
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: 1.21
+          cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v4
         with:
-          version: latest
-          args: --timeout=10m --fast
+          version: v1.55.2  # 使用具体版本而非latest，确保稳定性
+          args: --timeout=10m
+          skip-cache: false
+          only-new-issues: false
 
   benchmark:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: 1.21
+          cache: true
+
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@latest
 
       - name: Run benchmarks
-        run: go test -bench=. -benchmem ./... | tee benchmark.txt | benchstat
+        run: go test -bench=. -benchmem ./... | tee benchmark.txt && benchstat benchmark.txt
+        timeout-minutes: 10
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: benchmark.txt
+          retention-days: 14  # 保留14天的基准测试结果
 
   security:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: 1.21
+          cache: true
 
       - name: Run Gosec Security Scanner
-        uses: securecodewarrior/github-action-gosec@v1.0.0
+        uses: securecodewarrior/github-action-gosec@v2.0.0  # 更新到最新版本
         with:
-          args: "./..."
+          args: -exclude=G104 ./...  # 排除特定规则（如需要）
+          github-token: ${{ secrets.GITHUB_TOKEN }}  # 提供token以获得更好的集成

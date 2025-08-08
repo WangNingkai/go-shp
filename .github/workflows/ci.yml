@@ -79,10 +79,10 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v8
         with:
           version: v2.1.0
-          args: --timeout=10m --no-config # 禁用配置文件，使用默认设置
+          args: --timeout=10m 
           skip-cache: true # 暂时禁用缓存避免冲突
           only-new-issues: false
           install-mode: binary

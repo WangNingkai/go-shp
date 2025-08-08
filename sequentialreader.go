@@ -118,8 +118,29 @@ func (sr *seqReader) Next() bool {
 	if sr.err != nil {
 		return false
 	}
-	// read shape
+
 	num, size, shapetype, herr := readShapeRecordHeader(sr.shp)
+	if !sr.handleHeaderRead(num, herr) {
+		return false
+	}
+
+	if !sr.createShape(shapetype) {
+		return false
+	}
+
+	if !sr.readShapeData(size) {
+		return false
+	}
+
+	if !sr.readDbfRow() {
+		return false
+	}
+
+	return sr.err == nil
+}
+
+// handleHeaderRead handles the shape header reading results
+func (sr *seqReader) handleHeaderRead(num int32, herr error) bool {
 	if herr != nil {
 		if herr != io.EOF {
 			sr.err = fmt.Errorf("Error when reading shapefile header: %v", herr)
@@ -129,14 +150,34 @@ func (sr *seqReader) Next() bool {
 		return false
 	}
 	sr.num = num
+	return true
+}
+
+// createShape creates a new shape instance
+func (sr *seqReader) createShape(shapetype ShapeType) bool {
 	var err error
 	sr.shape, err = newShape(shapetype)
 	if err != nil {
 		sr.err = fmt.Errorf("Error decoding shape type: %v", err)
 		return false
 	}
+	return true
+}
+
+// readShapeData reads the shape data and handles any remaining bytes
+func (sr *seqReader) readShapeData(size int32) bool {
 	er := &errReader{Reader: sr.shp}
 	sr.shape.read(er)
+
+	if !sr.handleShapeReadErrors(er) {
+		return false
+	}
+
+	return sr.skipRemainingBytes(er, size)
+}
+
+// handleShapeReadErrors handles errors from shape reading
+func (sr *seqReader) handleShapeReadErrors(er *errReader) bool {
 	switch {
 	case er.e == io.EOF:
 		// io.EOF means end-of-file was reached gracefully after all
@@ -147,6 +188,11 @@ func (sr *seqReader) Next() bool {
 		sr.err = fmt.Errorf("Error while reading next shape: %v", er.e)
 		return false
 	}
+	return true
+}
+
+// skipRemainingBytes skips any remaining content bytes
+func (sr *seqReader) skipRemainingBytes(er *errReader, size int32) bool {
 	// size is content length in 16-bit words and includes the 4-byte shapetype.
 	// We've already read shapetype separately and er.n counts only bytes read by shape.read.
 	// Thus we need to skip the remaining content bytes: size*2 - 4 - er.n.
@@ -160,14 +206,20 @@ func (sr *seqReader) Next() bool {
 		sr.err = fmt.Errorf("Error when discarding bytes on sequential read: %v", ce)
 		return false
 	}
+	return true
+}
+
+// readDbfRow reads and validates the DBF row
+func (sr *seqReader) readDbfRow() bool {
 	if _, err := io.ReadFull(sr.dbf, sr.dbfRow); err != nil {
 		sr.err = fmt.Errorf("Error when reading DBF row: %v", err)
 		return false
 	}
 	if sr.dbfRow[0] != dbfDeletionFlagNotDeleted && sr.dbfRow[0] != dbfDeletionFlagDeleted {
-		sr.err = fmt.Errorf("Attribute row %d starts with incorrect deletion indicator", num)
+		sr.err = fmt.Errorf("Attribute row %d starts with incorrect deletion indicator", sr.num)
+		return false
 	}
-	return sr.err == nil
+	return true
 }
 
 // Shape implements a method of interface SequentialReader for seqReader.

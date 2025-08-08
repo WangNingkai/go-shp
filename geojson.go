@@ -36,85 +36,107 @@ type GeoJSONConverter struct{}
 func (c GeoJSONConverter) ShapeToGeoJSON(shape Shape) (*Geometry, error) {
 	switch s := shape.(type) {
 	case *Point:
-		return &Geometry{
-			Type:        "Point",
-			Coordinates: []float64{s.X, s.Y},
-		}, nil
-
+		return c.pointToGeoJSON(s)
 	case *PointZ:
-		return &Geometry{
-			Type:        "Point",
-			Coordinates: []float64{s.X, s.Y, s.Z},
-		}, nil
-
+		return c.pointZToGeoJSON(s)
 	case *PointM:
-		return &Geometry{
-			Type:        "Point",
-			Coordinates: []float64{s.X, s.Y},
-		}, nil
-
+		return c.pointMToGeoJSON(s)
 	case *MultiPoint:
-		coords := make([][]float64, len(s.Points))
-		for i, p := range s.Points {
-			coords[i] = []float64{p.X, p.Y}
-		}
-		return &Geometry{
-			Type:        "MultiPoint",
-			Coordinates: coords,
-		}, nil
-
+		return c.multiPointToGeoJSON(s)
 	case *MultiPointZ:
-		coords := make([][]float64, len(s.Points))
-		for i, p := range s.Points {
-			z := 0.0
-			if i < len(s.ZArray) {
-				z = s.ZArray[i]
-			}
-			coords[i] = []float64{p.X, p.Y, z}
-		}
-		return &Geometry{
-			Type:        "MultiPoint",
-			Coordinates: coords,
-		}, nil
-
+		return c.multiPointZToGeoJSON(s)
 	case *MultiPointM:
-		coords := make([][]float64, len(s.Points))
-		for i, p := range s.Points {
-			coords[i] = []float64{p.X, p.Y}
-		}
-		return &Geometry{
-			Type:        "MultiPoint",
-			Coordinates: coords,
-		}, nil
-
+		return c.multiPointMToGeoJSON(s)
 	case *PolyLine:
 		return c.polyLineToGeoJSON(s.Parts, s.Points, nil, nil)
-
 	case *PolyLineZ:
 		return c.polyLineToGeoJSON(s.Parts, s.Points, s.ZArray, nil)
-
 	case *PolyLineM:
 		return c.polyLineToGeoJSON(s.Parts, s.Points, nil, s.MArray)
-
 	case *Polygon:
 		return c.polygonToGeoJSON(s.Parts, s.Points, nil, nil)
-
 	case *PolygonZ:
 		return c.polygonToGeoJSON(s.Parts, s.Points, s.ZArray, nil)
-
 	case *PolygonM:
 		return c.polygonToGeoJSON(s.Parts, s.Points, nil, s.MArray)
-
 	case *MultiPatch:
-		// MultiPatch can be complex, convert to GeometryCollection
-		return &Geometry{
-			Type:       "GeometryCollection",
-			Geometries: []*Geometry{}, // TODO: Implement MultiPatch conversion
-		}, nil
-
+		return c.multiPatchToGeoJSON(s)
 	default:
 		return nil, fmt.Errorf("unsupported shape type: %T", shape)
 	}
+}
+
+// pointToGeoJSON converts Point to GeoJSON
+func (c GeoJSONConverter) pointToGeoJSON(s *Point) (*Geometry, error) {
+	return &Geometry{
+		Type:        "Point",
+		Coordinates: []float64{s.X, s.Y},
+	}, nil
+}
+
+// pointZToGeoJSON converts PointZ to GeoJSON
+func (c GeoJSONConverter) pointZToGeoJSON(s *PointZ) (*Geometry, error) {
+	return &Geometry{
+		Type:        "Point",
+		Coordinates: []float64{s.X, s.Y, s.Z},
+	}, nil
+}
+
+// pointMToGeoJSON converts PointM to GeoJSON
+func (c GeoJSONConverter) pointMToGeoJSON(s *PointM) (*Geometry, error) {
+	return &Geometry{
+		Type:        "Point",
+		Coordinates: []float64{s.X, s.Y},
+	}, nil
+}
+
+// multiPointToGeoJSON converts MultiPoint to GeoJSON
+func (c GeoJSONConverter) multiPointToGeoJSON(s *MultiPoint) (*Geometry, error) {
+	coords := make([][]float64, len(s.Points))
+	for i, p := range s.Points {
+		coords[i] = []float64{p.X, p.Y}
+	}
+	return &Geometry{
+		Type:        "MultiPoint",
+		Coordinates: coords,
+	}, nil
+}
+
+// multiPointZToGeoJSON converts MultiPointZ to GeoJSON
+func (c GeoJSONConverter) multiPointZToGeoJSON(s *MultiPointZ) (*Geometry, error) {
+	coords := make([][]float64, len(s.Points))
+	for i, p := range s.Points {
+		z := 0.0
+		if i < len(s.ZArray) {
+			z = s.ZArray[i]
+		}
+		coords[i] = []float64{p.X, p.Y, z}
+	}
+	return &Geometry{
+		Type:        "MultiPoint",
+		Coordinates: coords,
+	}, nil
+}
+
+// multiPointMToGeoJSON converts MultiPointM to GeoJSON
+func (c GeoJSONConverter) multiPointMToGeoJSON(s *MultiPointM) (*Geometry, error) {
+	coords := make([][]float64, len(s.Points))
+	for i, p := range s.Points {
+		coords[i] = []float64{p.X, p.Y}
+	}
+	return &Geometry{
+		Type:        "MultiPoint",
+		Coordinates: coords,
+	}, nil
+}
+
+// multiPatchToGeoJSON converts MultiPatch to GeoJSON
+func (c GeoJSONConverter) multiPatchToGeoJSON(_ *MultiPatch) (*Geometry, error) {
+	// MultiPatch can be complex, convert to GeometryCollection
+	return &Geometry{
+		Type:       "GeometryCollection",
+		Geometries: []*Geometry{}, // TODO: Implement MultiPatch conversion
+	}, nil
 }
 
 // polyLineToGeoJSON converts polyline data to GeoJSON LineString or MultiLineString
@@ -359,120 +381,140 @@ func (c GeoJSONConverter) createFieldsFromProperties(properties map[string]inter
 func (c GeoJSONConverter) GeoJSONToShape(geom *Geometry, _ ShapeType) (Shape, error) {
 	switch geom.Type {
 	case "Point":
-		coords, ok := geom.Coordinates.([]interface{})
-		if !ok || len(coords) < 2 {
-			return nil, fmt.Errorf("invalid Point coordinates")
-		}
-
-		x, err := c.toFloat64(coords[0])
-		if err != nil {
-			return nil, err
-		}
-		y, err := c.toFloat64(coords[1])
-		if err != nil {
-			return nil, err
-		}
-
-		return &Point{X: x, Y: y}, nil
-
+		return c.geoJSONPointToShape(geom)
 	case "MultiPoint":
-		coords, ok := geom.Coordinates.([]interface{})
-		if !ok {
-			return nil, fmt.Errorf("invalid MultiPoint coordinates")
-		}
-
-		points := make([]Point, len(coords))
-		for i, coord := range coords {
-			coordArr, ok := coord.([]interface{})
-			if !ok || len(coordArr) < 2 {
-				return nil, fmt.Errorf("invalid MultiPoint coordinate")
-			}
-
-			x, err := c.toFloat64(coordArr[0])
-			if err != nil {
-				return nil, err
-			}
-			y, err := c.toFloat64(coordArr[1])
-			if err != nil {
-				return nil, err
-			}
-
-			points[i] = Point{X: x, Y: y}
-		}
-
-		return &MultiPoint{
-			Box:       BBoxFromPoints(points),
-			NumPoints: int32(len(points)),
-			Points:    points,
-		}, nil
-
+		return c.geoJSONMultiPointToShape(geom)
 	case "LineString":
-		coords, ok := geom.Coordinates.([]interface{})
-		if !ok {
-			return nil, fmt.Errorf("invalid LineString coordinates")
-		}
-
-		points, err := c.coordinatesToPoints(coords)
-		if err != nil {
-			return nil, err
-		}
-
-		return NewPolyLine([][]Point{points}), nil
-
+		return c.geoJSONLineStringToShape(geom)
 	case "MultiLineString":
-		coords, ok := geom.Coordinates.([]interface{})
-		if !ok {
-			return nil, fmt.Errorf("invalid MultiLineString coordinates")
-		}
-
-		var parts [][]Point
-		for _, lineCoords := range coords {
-			lineCoordArr, ok := lineCoords.([]interface{})
-			if !ok {
-				return nil, fmt.Errorf("invalid MultiLineString line coordinates")
-			}
-
-			points, err := c.coordinatesToPoints(lineCoordArr)
-			if err != nil {
-				return nil, err
-			}
-			parts = append(parts, points)
-		}
-
-		return NewPolyLine(parts), nil
-
+		return c.geoJSONMultiLineStringToShape(geom)
 	case "Polygon":
-		coords, ok := geom.Coordinates.([]interface{})
-		if !ok {
-			return nil, fmt.Errorf("invalid Polygon coordinates")
-		}
-
-		var parts [][]Point
-		for _, ringCoords := range coords {
-			ringCoordArr, ok := ringCoords.([]interface{})
-			if !ok {
-				return nil, fmt.Errorf("invalid Polygon ring coordinates")
-			}
-
-			points, err := c.coordinatesToPoints(ringCoordArr)
-			if err != nil {
-				return nil, err
-			}
-			parts = append(parts, points)
-		}
-
-		polyline := NewPolyLine(parts)
-		return &Polygon{
-			Box:       polyline.Box,
-			NumParts:  polyline.NumParts,
-			NumPoints: polyline.NumPoints,
-			Parts:     polyline.Parts,
-			Points:    polyline.Points,
-		}, nil
-
+		return c.geoJSONPolygonToShape(geom)
 	default:
 		return nil, fmt.Errorf("unsupported geometry type: %s", geom.Type)
 	}
+}
+
+// geoJSONPointToShape converts GeoJSON Point to Shape
+func (c GeoJSONConverter) geoJSONPointToShape(geom *Geometry) (Shape, error) {
+	coords, ok := geom.Coordinates.([]interface{})
+	if !ok || len(coords) < 2 {
+		return nil, fmt.Errorf("invalid Point coordinates")
+	}
+
+	x, err := c.toFloat64(coords[0])
+	if err != nil {
+		return nil, err
+	}
+	y, err := c.toFloat64(coords[1])
+	if err != nil {
+		return nil, err
+	}
+
+	return &Point{X: x, Y: y}, nil
+}
+
+// geoJSONMultiPointToShape converts GeoJSON MultiPoint to Shape
+func (c GeoJSONConverter) geoJSONMultiPointToShape(geom *Geometry) (Shape, error) {
+	coords, ok := geom.Coordinates.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid MultiPoint coordinates")
+	}
+
+	points := make([]Point, len(coords))
+	for i, coord := range coords {
+		coordArr, ok := coord.([]interface{})
+		if !ok || len(coordArr) < 2 {
+			return nil, fmt.Errorf("invalid MultiPoint coordinate")
+		}
+
+		x, err := c.toFloat64(coordArr[0])
+		if err != nil {
+			return nil, err
+		}
+		y, err := c.toFloat64(coordArr[1])
+		if err != nil {
+			return nil, err
+		}
+
+		points[i] = Point{X: x, Y: y}
+	}
+
+	return &MultiPoint{
+		Box:       BBoxFromPoints(points),
+		NumPoints: int32(len(points)),
+		Points:    points,
+	}, nil
+}
+
+// geoJSONLineStringToShape converts GeoJSON LineString to Shape
+func (c GeoJSONConverter) geoJSONLineStringToShape(geom *Geometry) (Shape, error) {
+	coords, ok := geom.Coordinates.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid LineString coordinates")
+	}
+
+	points, err := c.coordinatesToPoints(coords)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewPolyLine([][]Point{points}), nil
+}
+
+// geoJSONMultiLineStringToShape converts GeoJSON MultiLineString to Shape
+func (c GeoJSONConverter) geoJSONMultiLineStringToShape(geom *Geometry) (Shape, error) {
+	coords, ok := geom.Coordinates.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid MultiLineString coordinates")
+	}
+
+	var parts [][]Point
+	for _, lineCoords := range coords {
+		lineCoordArr, ok := lineCoords.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid MultiLineString line coordinates")
+		}
+
+		points, err := c.coordinatesToPoints(lineCoordArr)
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, points)
+	}
+
+	return NewPolyLine(parts), nil
+}
+
+// geoJSONPolygonToShape converts GeoJSON Polygon to Shape
+func (c GeoJSONConverter) geoJSONPolygonToShape(geom *Geometry) (Shape, error) {
+	coords, ok := geom.Coordinates.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid Polygon coordinates")
+	}
+
+	var parts [][]Point
+	for _, ringCoords := range coords {
+		ringCoordArr, ok := ringCoords.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid Polygon ring coordinates")
+		}
+
+		points, err := c.coordinatesToPoints(ringCoordArr)
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, points)
+	}
+
+	polyline := NewPolyLine(parts)
+	return &Polygon{
+		Box:       polyline.Box,
+		NumParts:  polyline.NumParts,
+		NumPoints: polyline.NumPoints,
+		Parts:     polyline.Parts,
+		Points:    polyline.Points,
+	}, nil
 }
 
 // coordinatesToPoints converts coordinate arrays to Point slice

@@ -36,7 +36,6 @@ linters:
     revive:
       rules:
         - name: unused-parameter
-        - name: unused-return
     staticcheck:
       checks:
         - all

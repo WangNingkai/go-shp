@@ -175,102 +175,156 @@ func (StatisticsUtils) AnalyzeShapefile(filename string) (*ShapefileStats, error
 		BoundingBox:    reader.BBox(),
 	}
 
-	utils := GeometryUtils{}
-	var totalArea float64
-	largestArea := 0.0
-	smallestArea := math.Inf(1)
-	largestIndex := -1
-	smallestIndex := -1
+	s := statisticsCollector{
+		reader:        reader,
+		stats:         stats,
+		utils:         GeometryUtils{},
+		smallestArea:  math.Inf(1),
+		largestIndex:  -1,
+		smallestIndex: -1,
+	}
 
-	// 初始化属性统计
-	fields := reader.Fields()
+	return s.collectStatistics()
+}
+
+// statisticsCollector helps collect shapefile statistics
+type statisticsCollector struct {
+	reader        *Reader
+	stats         *ShapefileStats
+	utils         GeometryUtils
+	totalArea     float64
+	largestArea   float64
+	smallestArea  float64
+	largestIndex  int
+	smallestIndex int
+}
+
+// collectStatistics collects all statistics for the shapefile
+func (s *statisticsCollector) collectStatistics() (*ShapefileStats, error) {
+	s.initializeAttributeStats()
+
+	index := 0
+	for s.reader.Next() {
+		_, shape := s.reader.Shape()
+		s.stats.TotalShapes++
+
+		s.analyzeShape(shape, index)
+		s.analyzeAttributes(index)
+
+		index++
+	}
+
+	s.finalizeStatistics()
+	return s.stats, s.reader.Err()
+}
+
+// initializeAttributeStats initializes attribute statistics
+func (s *statisticsCollector) initializeAttributeStats() {
+	fields := s.reader.Fields()
 	for _, field := range fields {
-		stats.AttributeStats[field.String()] = AttributeStats{
+		s.stats.AttributeStats[field.String()] = AttributeStats{
 			FieldType: field.Fieldtype,
 			MinLength: math.MaxInt32,
 			MaxLength: 0,
 			Values:    make([]string, 0),
 		}
 	}
+}
 
-	index := 0
-	for reader.Next() {
-		_, shape := reader.Shape()
-		stats.TotalShapes++
+// analyzeShape analyzes a single shape and updates statistics
+func (s *statisticsCollector) analyzeShape(shape Shape, index int) {
+	switch sh := shape.(type) {
+	case *Point:
+		s.stats.ShapeTypes[POINT]++
+	case *PolyLine:
+		s.stats.ShapeTypes[POLYLINE]++
+	case *Polygon:
+		s.stats.ShapeTypes[POLYGON]++
+		s.analyzePolygonArea(sh, index)
+	case *MultiPoint:
+		s.stats.ShapeTypes[MULTIPOINT]++
+	}
+}
 
-		// 统计形状类型
-		switch s := shape.(type) {
-		case *Point:
-			stats.ShapeTypes[POINT]++
-		case *PolyLine:
-			stats.ShapeTypes[POLYLINE]++
-		case *Polygon:
-			stats.ShapeTypes[POLYGON]++
-			// 计算面积
-			area := utils.Area(s.Points)
-			totalArea += area
-			if area > largestArea {
-				largestArea = area
-				largestIndex = index
-			}
-			if area < smallestArea {
-				smallestArea = area
-				smallestIndex = index
-			}
-		case *MultiPoint:
-			stats.ShapeTypes[MULTIPOINT]++
-		}
+// analyzePolygonArea analyzes polygon area and updates area statistics
+func (s *statisticsCollector) analyzePolygonArea(polygon *Polygon, index int) {
+	area := s.utils.Area(polygon.Points)
+	s.totalArea += area
 
-		// 统计属性
-		for i, field := range fields {
-			attr := reader.ReadAttribute(index, i)
-			fieldStats := stats.AttributeStats[field.String()]
-
-			if attr == "" {
-				fieldStats.NullValues++
-			} else {
-				if len(attr) < fieldStats.MinLength {
-					fieldStats.MinLength = len(attr)
-				}
-				if len(attr) > fieldStats.MaxLength {
-					fieldStats.MaxLength = len(attr)
-				}
-
-				// 收集唯一值（限制数量避免内存过多使用）
-				if len(fieldStats.Values) < 1000 {
-					found := false
-					for _, val := range fieldStats.Values {
-						if val == attr {
-							found = true
-							break
-						}
-					}
-					if !found {
-						fieldStats.Values = append(fieldStats.Values, attr)
-					}
-				}
-			}
-
-			stats.AttributeStats[field.String()] = fieldStats
-		}
-
-		index++
+	if area > s.largestArea {
+		s.largestArea = area
+		s.largestIndex = index
 	}
 
+	if area < s.smallestArea {
+		s.smallestArea = area
+		s.smallestIndex = index
+	}
+}
+
+// analyzeAttributes analyzes attributes for a shape
+func (s *statisticsCollector) analyzeAttributes(index int) {
+	fields := s.reader.Fields()
+	for i, field := range fields {
+		attr := s.reader.ReadAttribute(index, i)
+		fieldStats := s.stats.AttributeStats[field.String()]
+
+		s.updateFieldStats(&fieldStats, attr)
+		s.stats.AttributeStats[field.String()] = fieldStats
+	}
+}
+
+// updateFieldStats updates field statistics for a single attribute
+func (s *statisticsCollector) updateFieldStats(fieldStats *AttributeStats, attr string) {
+	if attr == "" {
+		fieldStats.NullValues++
+		return
+	}
+
+	s.updateLengthStats(fieldStats, attr)
+	s.updateUniqueValues(fieldStats, attr)
+}
+
+// updateLengthStats updates length statistics for a field
+func (s *statisticsCollector) updateLengthStats(fieldStats *AttributeStats, attr string) {
+	if len(attr) < fieldStats.MinLength {
+		fieldStats.MinLength = len(attr)
+	}
+	if len(attr) > fieldStats.MaxLength {
+		fieldStats.MaxLength = len(attr)
+	}
+}
+
+// updateUniqueValues updates unique values for a field
+func (s *statisticsCollector) updateUniqueValues(fieldStats *AttributeStats, attr string) {
+	// 收集唯一值（限制数量避免内存过多使用）
+	if len(fieldStats.Values) >= 1000 {
+		return
+	}
+
+	for _, val := range fieldStats.Values {
+		if val == attr {
+			return // Already exists
+		}
+	}
+
+	fieldStats.Values = append(fieldStats.Values, attr)
+}
+
+// finalizeStatistics calculates final statistics
+func (s *statisticsCollector) finalizeStatistics() {
 	// 计算唯一值数量
-	for fieldName, fieldStats := range stats.AttributeStats {
+	for fieldName, fieldStats := range s.stats.AttributeStats {
 		fieldStats.UniqueValues = len(fieldStats.Values)
-		stats.AttributeStats[fieldName] = fieldStats
+		s.stats.AttributeStats[fieldName] = fieldStats
 	}
 
-	stats.TotalArea = totalArea
-	if stats.TotalShapes > 0 {
-		stats.AverageArea = totalArea / float64(stats.TotalShapes)
+	s.stats.TotalArea = s.totalArea
+	if s.stats.TotalShapes > 0 {
+		s.stats.AverageArea = s.totalArea / float64(s.stats.TotalShapes)
 	}
-	stats.LargestShape = largestIndex
-	stats.SmallestShape = smallestIndex
-
-	return stats, reader.Err()
+	s.stats.LargestShape = s.largestIndex
+	s.stats.SmallestShape = s.smallestIndex
 }
 
 // String 返回统计信息的字符串表示

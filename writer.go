@@ -116,6 +116,7 @@ func openAndPositionIndex(shp *os.File, basename string, num *int32) (*os.File, 
 	shx, err := os.OpenFile(basename+".shx", os.O_RDWR, 0o666)
 	if os.IsNotExist(err) {
 		// TODO allow index file to not exist and rebuild
+		return nil, fmt.Errorf("index file does not exist: %v", err)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("cannot open shapefile index: %v", err)

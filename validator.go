@@ -24,6 +24,11 @@ func (v *DefaultValidator) Validate(shape Shape) error {
 		return err
 	}
 
+	return v.validateShapeType(shape)
+}
+
+// validateShapeType validates a specific shape type
+func (v *DefaultValidator) validateShapeType(shape Shape) error {
 	switch s := shape.(type) {
 	case *Point:
 		return v.validatePoint(s)
@@ -33,6 +38,14 @@ func (v *DefaultValidator) Validate(shape Shape) error {
 		return v.validatePolygon(s)
 	case *MultiPoint:
 		return v.validateMultiPoint(s)
+	default:
+		return v.validateZMShapes(shape)
+	}
+}
+
+// validateZMShapes validates Z and M coordinate shapes
+func (v *DefaultValidator) validateZMShapes(shape Shape) error {
+	switch s := shape.(type) {
 	case *PointZ:
 		return v.validatePointZ(s)
 	case *PolyLineZ:
@@ -58,20 +71,36 @@ func (v *DefaultValidator) Validate(shape Shape) error {
 
 // validateBBox 验证边界框
 func (v *DefaultValidator) validateBBox(bbox Box) error {
-	if math.IsNaN(bbox.MinX) || math.IsNaN(bbox.MinY) ||
-		math.IsNaN(bbox.MaxX) || math.IsNaN(bbox.MaxY) {
-		return NewShapeError(ErrInvalidFormat, "bounding box contains NaN values", nil)
+	if err := v.validateBBoxNaN(bbox); err != nil {
+		return err
 	}
 
-	if math.IsInf(bbox.MinX, 0) || math.IsInf(bbox.MinY, 0) ||
-		math.IsInf(bbox.MaxX, 0) || math.IsInf(bbox.MaxY, 0) {
-		return NewShapeError(ErrInvalidFormat, "bounding box contains infinite values", nil)
+	if err := v.validateBBoxInf(bbox); err != nil {
+		return err
 	}
 
 	if bbox.MinX > bbox.MaxX || bbox.MinY > bbox.MaxY {
 		return NewShapeError(ErrInvalidFormat, "invalid bounding box: min > max", nil)
 	}
 
+	return nil
+}
+
+// validateBBoxNaN checks for NaN values in bbox
+func (v *DefaultValidator) validateBBoxNaN(bbox Box) error {
+	if math.IsNaN(bbox.MinX) || math.IsNaN(bbox.MinY) ||
+		math.IsNaN(bbox.MaxX) || math.IsNaN(bbox.MaxY) {
+		return NewShapeError(ErrInvalidFormat, "bounding box contains NaN values", nil)
+	}
+	return nil
+}
+
+// validateBBoxInf checks for infinite values in bbox
+func (v *DefaultValidator) validateBBoxInf(bbox Box) error {
+	if math.IsInf(bbox.MinX, 0) || math.IsInf(bbox.MinY, 0) ||
+		math.IsInf(bbox.MaxX, 0) || math.IsInf(bbox.MaxY, 0) {
+		return NewShapeError(ErrInvalidFormat, "bounding box contains infinite values", nil)
+	}
 	return nil
 }
 

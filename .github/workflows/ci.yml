@@ -82,6 +82,9 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.3.0
+          install-mode: "binary"
+          verify: false
+          skip-cache: true
 
   benchmark:
     runs-on: ubuntu-latest

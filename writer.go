@@ -67,23 +67,38 @@ func Create(filename string, t ShapeType) (*Writer, error) {
 // the first error that was encountered during creation of that Writer. The
 // shapefile must have a valid index file.
 func Append(filename string) (*Writer, error) {
-	shp, err := os.OpenFile(filename, os.O_RDWR, 0o666)
+	// open shp/shx and init writer
+	w, shp, basename, err := openAndInitWriter(filename)
 	if err != nil {
 		return nil, err
 	}
+	// load shx and position cursors
+	shx, err := openAndPositionIndex(shp, basename, &w.num)
+	if err != nil {
+		return nil, err
+	}
+	w.shx = shx
+	// try to open dbf (optional)
+	if err := openAndInitDbf(basename, w); err != nil {
+		return nil, err
+	}
+	return w, nil
+}
+
+// openAndInitWriter opens the shp file and reads geometry type and bbox
+func openAndInitWriter(filename string) (*Writer, *os.File, string, error) {
+	shp, err := os.OpenFile(filename, os.O_RDWR, 0o666)
+	if err != nil {
+		return nil, nil, "", err
+	}
 	ext := filepath.Ext(filename)
 	basename := filename[:len(filename)-len(ext)]
-	w := &Writer{
-		filename: basename,
-		shp:      shp,
+	w := &Writer{filename: basename, shp: shp}
+	if _, err = shp.Seek(32, io.SeekStart); err != nil {
+		return nil, nil, "", fmt.Errorf("cannot seek to SHP geometry type: %v", err)
 	}
-	_, err = shp.Seek(32, io.SeekStart)
-	if err != nil {
-		return nil, fmt.Errorf("cannot seek to SHP geometry type: %v", err)
-	}
-	err = binary.Read(shp, binary.LittleEndian, &w.GeometryType)
-	if err != nil {
-		return nil, fmt.Errorf("cannot read geometry type: %v", err)
+	if err = binary.Read(shp, binary.LittleEndian, &w.GeometryType); err != nil {
+		return nil, nil, "", fmt.Errorf("cannot read geometry type: %v", err)
 	}
 	er := &errReader{Reader: shp}
 	w.bbox.MinX = readFloat64(er)
@@ -91,83 +106,80 @@ func Append(filename string) (*Writer, error) {
 	w.bbox.MaxX = readFloat64(er)
 	w.bbox.MaxY = readFloat64(er)
 	if er.e != nil {
-		return nil, fmt.Errorf("cannot read bounding box: %v", er.e)
+		return nil, nil, "", fmt.Errorf("cannot read bounding box: %v", er.e)
 	}
+	return w, shp, basename, nil
+}
 
+// openAndPositionIndex opens the shx, positions cursors, and returns shx handle
+func openAndPositionIndex(shp *os.File, basename string, num *int32) (*os.File, error) {
 	shx, err := os.OpenFile(basename+".shx", os.O_RDWR, 0o666)
 	if os.IsNotExist(err) {
-		// TODO allow index file to not exist, in that case just
-		// read through all the shapes and create it on the fly
+		// TODO allow index file to not exist and rebuild
 	}
 	if err != nil {
 		return nil, fmt.Errorf("cannot open shapefile index: %v", err)
 	}
-	_, err = shx.Seek(-8, io.SeekEnd)
-	if err != nil {
+	if _, err = shx.Seek(-8, io.SeekEnd); err != nil {
 		return nil, fmt.Errorf("cannot seek to last shape index: %v", err)
 	}
 	var offset int32
-	err = binary.Read(shx, binary.BigEndian, &offset)
-	if err != nil {
+	er := &errReader{Reader: shx}
+	readBE(er, &offset)
+	if er.e != nil {
 		return nil, fmt.Errorf("cannot read last shape index: %v", err)
 	}
 	offset *= 2
-	_, err = shp.Seek(int64(offset), io.SeekStart)
-	if err != nil {
+	if _, err = shp.Seek(int64(offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("cannot seek to last shape: %v", err)
 	}
-	err = binary.Read(shp, binary.BigEndian, &w.num)
-	if err != nil {
+	er = &errReader{Reader: shp}
+	readBE(er, num)
+	if er.e != nil {
 		return nil, fmt.Errorf("cannot read number of last shape: %v", err)
 	}
-	_, err = shp.Seek(0, io.SeekEnd)
-	if err != nil {
+	if _, err = shp.Seek(0, io.SeekEnd); err != nil {
 		return nil, fmt.Errorf("cannot seek to SHP end: %v", err)
 	}
-	_, err = shx.Seek(0, io.SeekEnd)
-	if err != nil {
+	if _, err = shx.Seek(0, io.SeekEnd); err != nil {
 		return nil, fmt.Errorf("cannot seek to SHX end: %v", err)
 	}
-	w.shx = shx
+	return shx, nil
+}
 
+// openAndInitDbf opens the DBF (optional) and initializes writer fields
+func openAndInitDbf(basename string, w *Writer) error {
 	dbf, err := os.Open(basename + ".dbf")
 	if os.IsNotExist(err) {
-		return w, nil // it's okay if the DBF does not exist
+		return nil // it's okay if the DBF does not exist
 	}
 	if err != nil {
-		return nil, fmt.Errorf("cannot open DBF: %v", err)
+		return fmt.Errorf("cannot open DBF: %v", err)
 	}
-
-	_, err = dbf.Seek(8, io.SeekStart)
-	if err != nil {
-		return nil, fmt.Errorf("cannot seek in DBF: %v", err)
+	if _, err = dbf.Seek(dbfOffsetHeaderLen, io.SeekStart); err != nil {
+		return fmt.Errorf("cannot seek in DBF: %v", err)
 	}
-	err = binary.Read(dbf, binary.LittleEndian, &w.dbfHeaderLength)
-	if err != nil {
-		return nil, fmt.Errorf("cannot read header length from DBF: %v", err)
+	er := &errReader{Reader: dbf}
+	readLE(er, &w.dbfHeaderLength)
+	if er.e != nil {
+		return fmt.Errorf("cannot read header length from DBF: %v", err)
 	}
-	err = binary.Read(dbf, binary.LittleEndian, &w.dbfRecordLength)
-	if err != nil {
-		return nil, fmt.Errorf("cannot read record length from DBF: %v", err)
+	readLE(er, &w.dbfRecordLength)
+	if er.e != nil {
+		return fmt.Errorf("cannot read record length from DBF: %v", err)
 	}
-
-	_, err = dbf.Seek(20, io.SeekCurrent) // skip padding
-	if err != nil {
-		return nil, fmt.Errorf("cannot seek in DBF: %v", err)
+	if _, err = dbf.Seek(dbfHeaderPaddingLen, io.SeekCurrent); err != nil { // skip padding
+		return fmt.Errorf("cannot seek in DBF: %v", err)
 	}
-	numFields := int(math.Floor(float64(w.dbfHeaderLength-33) / 32.0))
-	w.dbfFields = make([]Field, numFields)
-	err = binary.Read(dbf, binary.LittleEndian, &w.dbfFields)
-	if err != nil {
-		return nil, fmt.Errorf("cannot read number of fields from DBF: %v", err)
+	numFields := calcNumFields(w.dbfHeaderLength)
+	if w.dbfFields, err = readDbfFields(dbf, numFields); err != nil {
+		return fmt.Errorf("cannot read number of fields from DBF: %v", err)
 	}
-	_, err = dbf.Seek(0, io.SeekEnd) // skip padding
-	if err != nil {
-		return nil, fmt.Errorf("cannot seek to DBF end: %v", err)
+	if _, err = dbf.Seek(0, io.SeekEnd); err != nil { // skip padding
+		return fmt.Errorf("cannot seek to DBF end: %v", err)
 	}
 	w.dbf = dbf
-
-	return w, nil
+	return nil
 }
 
 // Write shape to the Shapefile. This also creates
@@ -183,20 +195,22 @@ func (w *Writer) Write(shape Shape) int32 {
 	}
 
 	w.num++
-	_ = binary.Write(w.shp, binary.BigEndian, w.num)
+	ewShp := &errWriter{Writer: w.shp}
+	writeBE(ewShp, w.num)
 	_, _ = w.shp.Seek(4, io.SeekCurrent)
 	start, _ := w.shp.Seek(0, io.SeekCurrent)
-	_ = binary.Write(w.shp, binary.LittleEndian, w.GeometryType)
+	writeLE(ewShp, w.GeometryType)
 	shape.write(w.shp)
 	finish, _ := w.shp.Seek(0, io.SeekCurrent)
 	length := int32(math.Floor((float64(finish) - float64(start)) / 2.0))
 	_, _ = w.shp.Seek(start-4, io.SeekStart)
-	_ = binary.Write(w.shp, binary.BigEndian, length)
+	writeBE(ewShp, length)
 	_, _ = w.shp.Seek(finish, io.SeekStart)
 
 	// write shx
-	binary.Write(w.shx, binary.BigEndian, int32((start-8)/2))
-	binary.Write(w.shx, binary.BigEndian, length)
+	ewShx := &errWriter{Writer: w.shx}
+	writeBE(ewShx, int32((start-8)/2))
+	writeBE(ewShx, length)
 
 	// write empty record to dbf
 	if w.dbf != nil {
@@ -229,32 +243,34 @@ func (w *Writer) writeHeader(ws io.WriteSeeker) {
 		filelength = 100
 	}
 	_, _ = ws.Seek(0, io.SeekStart)
+	ew := &errWriter{Writer: ws}
 	// file code
-	_ = binary.Write(ws, binary.BigEndian, []int32{9994, 0, 0, 0, 0, 0})
+	writeBE(ew, []int32{9994, 0, 0, 0, 0, 0})
 	// file length
-	_ = binary.Write(ws, binary.BigEndian, int32(filelength/2))
+	writeBE(ew, int32(filelength/2))
 	// version and shape type
-	_ = binary.Write(ws, binary.LittleEndian, []int32{1000, int32(w.GeometryType)})
+	writeLE(ew, []int32{1000, int32(w.GeometryType)})
 	// bounding box
-	_ = binary.Write(ws, binary.LittleEndian, w.bbox)
+	writeLE(ew, w.bbox)
 	// elevation, measure
-	_ = binary.Write(ws, binary.LittleEndian, []float64{0.0, 0.0, 0.0, 0.0})
+	writeLE(ew, []float64{0.0, 0.0, 0.0, 0.0})
 }
 
 // writeDbfHeader writes a DBF header to ws.
 func (w *Writer) writeDbfHeader(ws io.WriteSeeker) {
 	_, _ = ws.Seek(0, 0)
+	ew := &errWriter{Writer: ws}
 	// version, year (YEAR-1990), month, day
-	_ = binary.Write(ws, binary.LittleEndian, []byte{3, 24, 5, 3})
+	writeLE(ew, []byte{3, 24, 5, 3})
 	// number of records
-	_ = binary.Write(ws, binary.LittleEndian, w.num)
+	writeLE(ew, w.num)
 	// header length, record length
-	_ = binary.Write(ws, binary.LittleEndian, []int16{w.dbfHeaderLength, w.dbfRecordLength})
+	writeLE(ew, []int16{w.dbfHeaderLength, w.dbfRecordLength})
 	// padding
-	_ = binary.Write(ws, binary.LittleEndian, make([]byte, 20))
+	writeLE(ew, make([]byte, 20))
 
 	for _, field := range w.dbfFields {
-		_ = binary.Write(ws, binary.LittleEndian, field)
+		writeLE(ew, field)
 	}
 
 	// end with return
@@ -286,7 +302,8 @@ func (w *Writer) SetFields(fields []Field) error {
 
 	// fill header space with empty bytes for now
 	buf := make([]byte, w.dbfHeaderLength)
-	_ = binary.Write(w.dbf, binary.LittleEndian, buf)
+	ew := &errWriter{Writer: w.dbf}
+	writeLE(ew, buf)
 
 	// write empty records
 	for n := int32(0); n < w.num; n++ {
@@ -303,7 +320,8 @@ func (w *Writer) writeEmptyRecord() {
 	_, _ = w.dbf.Seek(0, io.SeekEnd)
 	buf := make([]byte, w.dbfRecordLength)
 	buf[0] = ' '
-	_ = binary.Write(w.dbf, binary.LittleEndian, buf)
+	ew := &errWriter{Writer: w.dbf}
+	writeLE(ew, buf)
 }
 
 // WriteAttribute writes value for field into the given row in the DBF. Row
@@ -331,12 +349,11 @@ func (w *Writer) WriteAttribute(row int, field int, value interface{}) error {
 		return fmt.Errorf("unable to write field %v: %q exceeds field length %v", field, buf, sz)
 	}
 
-	seekTo := 1 + int64(w.dbfHeaderLength) + (int64(row) * int64(w.dbfRecordLength))
-	for n := 0; n < field; n++ {
-		seekTo += int64(w.dbfFields[n].Size)
-	}
+	seekTo := dbfFieldOffset(w.dbfHeaderLength, w.dbfRecordLength, row, w.dbfFields, field)
 	_, _ = w.dbf.Seek(seekTo, io.SeekStart)
-	return binary.Write(w.dbf, binary.LittleEndian, buf)
+	ew := &errWriter{Writer: w.dbf}
+	writeLE(ew, buf)
+	return ew.e
 }
 
 // BBox returns the bounding box of the Writer.

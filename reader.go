@@ -86,22 +86,14 @@ func (r *Reader) BBox() Box {
 // Read and parse headers in the Shapefile. This will
 // fill out GeometryType, filelength and bbox.
 func (r *Reader) readHeaders() error {
-	er := &errReader{Reader: r.shp}
-	// don't trust the the filelength in the header
-	r.filelength, _ = r.shp.Seek(0, io.SeekEnd)
-
-	var filelength int32
-	_, _ = r.shp.Seek(24, 0)
-	// file length
-	_ = binary.Read(er, binary.BigEndian, &filelength)
-	_, _ = r.shp.Seek(32, 0)
-	_ = binary.Read(er, binary.LittleEndian, &r.GeometryType)
-	r.bbox.MinX = readFloat64(er)
-	r.bbox.MinY = readFloat64(er)
-	r.bbox.MaxX = readFloat64(er)
-	r.bbox.MaxY = readFloat64(er)
-	_, _ = r.shp.Seek(100, 0)
-	return er.e
+	fl, geom, bbox, err := readShpHeaderSeeker(r.shp)
+	if err != nil {
+		return err
+	}
+	r.filelength = fl
+	r.GeometryType = geom
+	r.bbox = bbox
+	return nil
 }
 
 func readFloat64(r io.Reader) float64 {
@@ -135,41 +127,31 @@ func (r *Reader) Attribute(n int) string {
 	return r.ReadAttribute(int(r.num)-1, n)
 }
 
+// constructor table to reduce switch duplication
+var shapeConstructors = map[ShapeType]func() Shape{
+	NULL:        func() Shape { return new(Null) },
+	POINT:       func() Shape { return new(Point) },
+	POLYLINE:    func() Shape { return new(PolyLine) },
+	POLYGON:     func() Shape { return new(Polygon) },
+	MULTIPOINT:  func() Shape { return new(MultiPoint) },
+	POINTZ:      func() Shape { return new(PointZ) },
+	POLYLINEZ:   func() Shape { return new(PolyLineZ) },
+	POLYGONZ:    func() Shape { return new(PolygonZ) },
+	MULTIPOINTZ: func() Shape { return new(MultiPointZ) },
+	POINTM:      func() Shape { return new(PointM) },
+	POLYLINEM:   func() Shape { return new(PolyLineM) },
+	POLYGONM:    func() Shape { return new(PolygonM) },
+	MULTIPOINTM: func() Shape { return new(MultiPointM) },
+	MULTIPATCH:  func() Shape { return new(MultiPatch) },
+}
+
 // newShape creates a new shape with a given type.
 func newShape(shapetype ShapeType) (Shape, error) {
-	switch shapetype {
-	case NULL:
-		return new(Null), nil
-	case POINT:
-		return new(Point), nil
-	case POLYLINE:
-		return new(PolyLine), nil
-	case POLYGON:
-		return new(Polygon), nil
-	case MULTIPOINT:
-		return new(MultiPoint), nil
-	case POINTZ:
-		return new(PointZ), nil
-	case POLYLINEZ:
-		return new(PolyLineZ), nil
-	case POLYGONZ:
-		return new(PolygonZ), nil
-	case MULTIPOINTZ:
-		return new(MultiPointZ), nil
-	case POINTM:
-		return new(PointM), nil
-	case POLYLINEM:
-		return new(PolyLineM), nil
-	case POLYGONM:
-		return new(PolygonM), nil
-	case MULTIPOINTM:
-		return new(MultiPointM), nil
-	case MULTIPATCH:
-		return new(MultiPatch), nil
-	default:
-		return nil, NewShapeError(ErrUnsupportedType,
-			fmt.Sprintf("unsupported shape type: %v", shapetype), nil)
+	if ctor, ok := shapeConstructors[shapetype]; ok {
+		return ctor(), nil
 	}
+	return nil, NewShapeError(ErrUnsupportedType,
+		fmt.Sprintf("unsupported shape type: %v", shapetype), nil)
 }
 
 // Next reads in the next Shape in the Shapefile, which
@@ -182,27 +164,22 @@ func (r *Reader) Next() bool {
 		return false
 	}
 
-	var size int32
-	var shapetype ShapeType
-	er := &errReader{Reader: r.shp}
-	_ = binary.Read(er, binary.BigEndian, &r.num)
-	_ = binary.Read(er, binary.BigEndian, &size)
-	_ = binary.Read(er, binary.LittleEndian, &shapetype)
-	if er.e != nil {
-		if er.e != io.EOF {
-			r.err = fmt.Errorf("Error when reading metadata of next shape: %v", er.e)
+	num, size, shapetype, err := readShapeRecordHeader(r.shp)
+	if err != nil {
+		if err != io.EOF {
+			r.err = fmt.Errorf("Error when reading metadata of next shape: %v", err)
 		} else {
 			r.err = io.EOF
 		}
 		return false
 	}
-
-	var err error
+	r.num = num
 	r.shape, err = newShape(shapetype)
 	if err != nil {
 		r.err = fmt.Errorf("Error decoding shape type: %v", err)
 		return false
 	}
+	er := &errReader{Reader: r.shp}
 	r.shape.read(er)
 	if er.e != nil {
 		r.err = fmt.Errorf("Error while reading next shape: %v", er.e)
@@ -228,15 +205,17 @@ func (r *Reader) openDbf() (err error) {
 	}
 
 	// read header
-	_, _ = r.dbf.Seek(4, io.SeekStart)
-	_ = binary.Read(r.dbf, binary.LittleEndian, &r.dbfNumRecords)
-	_ = binary.Read(r.dbf, binary.LittleEndian, &r.dbfHeaderLength)
-	_ = binary.Read(r.dbf, binary.LittleEndian, &r.dbfRecordLength)
+	_, _ = r.dbf.Seek(dbfOffsetNumRecords, io.SeekStart)
+	er := &errReader{Reader: r.dbf}
+	readLE(er, &r.dbfNumRecords)
+	readLE(er, &r.dbfHeaderLength)
+	readLE(er, &r.dbfRecordLength)
 
-	_, _ = r.dbf.Seek(20, io.SeekCurrent) // skip padding
-	numFields := int(math.Floor(float64(r.dbfHeaderLength-33) / 32.0))
-	r.dbfFields = make([]Field, numFields)
-	_ = binary.Read(r.dbf, binary.LittleEndian, &r.dbfFields)
+	_, _ = r.dbf.Seek(dbfHeaderPaddingLen, io.SeekCurrent) // skip padding
+	numFields := calcNumFields(r.dbfHeaderLength)
+	if r.dbfFields, err = readDbfFields(r.dbf, numFields); err != nil {
+		return err
+	}
 	return
 }
 
@@ -265,10 +244,7 @@ func (r *Reader) AttributeCount() int {
 // the DBF table as a string. Both values starts at 0.
 func (r *Reader) ReadAttribute(row int, field int) string {
 	_ = r.openDbf() // make sure we have a dbf file to read from
-	seekTo := 1 + int64(r.dbfHeaderLength) + (int64(row) * int64(r.dbfRecordLength))
-	for n := 0; n < field; n++ {
-		seekTo += int64(r.dbfFields[n].Size)
-	}
+	seekTo := dbfFieldOffset(r.dbfHeaderLength, r.dbfRecordLength, row, r.dbfFields, field)
 	_, _ = r.dbf.Seek(seekTo, io.SeekStart)
 	buf := make([]byte, r.dbfFields[field].Size)
 	_, _ = r.dbf.Read(buf)

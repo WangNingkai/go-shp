@@ -91,11 +91,12 @@ func readBasicPolygonShape(file io.Reader, box *Box, numParts *int32, numPoints 
 
 // writeBasicPolygonShape writes common polygon-like shape data
 func writeBasicPolygonShape(file io.Writer, box Box, numParts int32, numPoints int32, parts []int32, points []Point) {
-	_ = binary.Write(file, binary.LittleEndian, box)
-	_ = binary.Write(file, binary.LittleEndian, numParts)
-	_ = binary.Write(file, binary.LittleEndian, numPoints)
-	_ = binary.Write(file, binary.LittleEndian, parts)
-	_ = binary.Write(file, binary.LittleEndian, points)
+	ew := &errWriter{Writer: file}
+	writeLE(ew, box)
+	writeLE(ew, numParts)
+	writeLE(ew, numPoints)
+	writeLE(ew, parts)
+	writeLE(ew, points)
 }
 
 // readPolygonShapeWithZ reads polygon-like shapes with Z and M arrays
@@ -117,15 +118,16 @@ func readPolygonShapeWithZ(file io.Reader, box *Box, numParts *int32, numPoints 
 
 // writePolygonShapeWithZ writes polygon-like shapes with Z and M arrays
 func writePolygonShapeWithZ(file io.Writer, box Box, numParts int32, numPoints int32, parts []int32, points []Point, zRange [2]float64, zArray []float64, mRange [2]float64, mArray []float64) {
-	_ = binary.Write(file, binary.LittleEndian, box)
-	_ = binary.Write(file, binary.LittleEndian, numParts)
-	_ = binary.Write(file, binary.LittleEndian, numPoints)
-	_ = binary.Write(file, binary.LittleEndian, parts)
-	_ = binary.Write(file, binary.LittleEndian, points)
-	_ = binary.Write(file, binary.LittleEndian, zRange)
-	_ = binary.Write(file, binary.LittleEndian, zArray)
-	_ = binary.Write(file, binary.LittleEndian, mRange)
-	_ = binary.Write(file, binary.LittleEndian, mArray)
+	ew := &errWriter{Writer: file}
+	writeLE(ew, box)
+	writeLE(ew, numParts)
+	writeLE(ew, numPoints)
+	writeLE(ew, parts)
+	writeLE(ew, points)
+	writeLE(ew, zRange)
+	writeLE(ew, zArray)
+	writeLE(ew, mRange)
+	writeLE(ew, mArray)
 }
 
 // readPolygonShapeWithM reads polygon-like shapes with only M arrays
@@ -144,13 +146,14 @@ func readPolygonShapeWithM(file io.Reader, box *Box, numParts *int32, numPoints 
 
 // writePolygonShapeWithM writes polygon-like shapes with only M arrays
 func writePolygonShapeWithM(file io.Writer, box Box, numParts int32, numPoints int32, parts []int32, points []Point, mRange [2]float64, mArray []float64) {
-	_ = binary.Write(file, binary.LittleEndian, box)
-	_ = binary.Write(file, binary.LittleEndian, numParts)
-	_ = binary.Write(file, binary.LittleEndian, numPoints)
-	_ = binary.Write(file, binary.LittleEndian, parts)
-	_ = binary.Write(file, binary.LittleEndian, points)
-	_ = binary.Write(file, binary.LittleEndian, mRange)
-	_ = binary.Write(file, binary.LittleEndian, mArray)
+	ew := &errWriter{Writer: file}
+	writeLE(ew, box)
+	writeLE(ew, numParts)
+	writeLE(ew, numPoints)
+	writeLE(ew, parts)
+	writeLE(ew, points)
+	writeLE(ew, mRange)
+	writeLE(ew, mArray)
 }
 
 // Helper functions for multipoint shapes
@@ -162,9 +165,57 @@ func readMultiPointBasic(file io.Reader, box *Box, numPoints *int32, points *[]P
 }
 
 func writeMultiPointBasic(file io.Writer, box Box, numPoints int32, points []Point) {
-	_ = binary.Write(file, binary.LittleEndian, box)
-	_ = binary.Write(file, binary.LittleEndian, numPoints)
-	_ = binary.Write(file, binary.LittleEndian, points)
+	ew := &errWriter{Writer: file}
+	writeLE(ew, box)
+	writeLE(ew, numPoints)
+	writeLE(ew, points)
+}
+
+// readMultiPointWithZ reads multipoint with Z and M arrays
+func readMultiPointWithZ(file io.Reader, box *Box, numPoints *int32, points *[]Point, zRange *[2]float64, zArray *[]float64, mRange *[2]float64, mArray *[]float64) {
+	binary.Read(file, binary.LittleEndian, box)
+	binary.Read(file, binary.LittleEndian, numPoints)
+	*points = make([]Point, *numPoints)
+	*zArray = make([]float64, *numPoints)
+	*mArray = make([]float64, *numPoints)
+	binary.Read(file, binary.LittleEndian, points)
+	binary.Read(file, binary.LittleEndian, zRange)
+	binary.Read(file, binary.LittleEndian, zArray)
+	binary.Read(file, binary.LittleEndian, mRange)
+	binary.Read(file, binary.LittleEndian, mArray)
+}
+
+// writeMultiPointWithZ writes multipoint with Z and M arrays
+func writeMultiPointWithZ(file io.Writer, box Box, numPoints int32, points []Point, zRange [2]float64, zArray []float64, mRange [2]float64, mArray []float64) {
+	ew := &errWriter{Writer: file}
+	writeLE(ew, box)
+	writeLE(ew, numPoints)
+	writeLE(ew, points)
+	writeLE(ew, zRange)
+	writeLE(ew, zArray)
+	writeLE(ew, mRange)
+	writeLE(ew, mArray)
+}
+
+// readMultiPointWithM reads multipoint with only M arrays
+func readMultiPointWithM(file io.Reader, box *Box, numPoints *int32, points *[]Point, mRange *[2]float64, mArray *[]float64) {
+	binary.Read(file, binary.LittleEndian, box)
+	binary.Read(file, binary.LittleEndian, numPoints)
+	*points = make([]Point, *numPoints)
+	*mArray = make([]float64, *numPoints)
+	binary.Read(file, binary.LittleEndian, points)
+	binary.Read(file, binary.LittleEndian, mRange)
+	binary.Read(file, binary.LittleEndian, mArray)
+}
+
+// writeMultiPointWithM writes multipoint with only M arrays
+func writeMultiPointWithM(file io.Writer, box Box, numPoints int32, points []Point, mRange [2]float64, mArray []float64) {
+	ew := &errWriter{Writer: file}
+	writeLE(ew, box)
+	writeLE(ew, numPoints)
+	writeLE(ew, points)
+	writeLE(ew, mRange)
+	writeLE(ew, mArray)
 }
 
 // Shape interface
@@ -188,7 +239,8 @@ func (n *Null) read(file io.Reader) {
 }
 
 func (n *Null) write(file io.Writer) {
-	_ = binary.Write(file, binary.LittleEndian, n)
+	ew := &errWriter{Writer: file}
+	writeLE(ew, n)
 }
 
 // Point is the shape that consists of single a geometry point.
@@ -207,7 +259,8 @@ func (p *Point) read(file io.Reader) {
 }
 
 func (p *Point) write(file io.Writer) {
-	_ = binary.Write(file, binary.LittleEndian, p)
+	ew := &errWriter{Writer: file}
+	writeLE(ew, p)
 }
 
 func flatten(points [][]Point) []Point {
@@ -327,7 +380,8 @@ func (p *PointZ) read(file io.Reader) {
 }
 
 func (p *PointZ) write(file io.Writer) {
-	_ = binary.Write(file, binary.LittleEndian, p)
+	ew := &errWriter{Writer: file}
+	writeLE(ew, p)
 }
 
 // PolyLineZ is a shape which consists of one or more parts. A part is a
@@ -391,26 +445,11 @@ func (p MultiPointZ) BBox() Box {
 }
 
 func (p *MultiPointZ) read(file io.Reader) {
-	binary.Read(file, binary.LittleEndian, &p.Box)
-	binary.Read(file, binary.LittleEndian, &p.NumPoints)
-	p.Points = make([]Point, p.NumPoints)
-	p.ZArray = make([]float64, p.NumPoints)
-	p.MArray = make([]float64, p.NumPoints)
-	binary.Read(file, binary.LittleEndian, &p.Points)
-	binary.Read(file, binary.LittleEndian, &p.ZRange)
-	binary.Read(file, binary.LittleEndian, &p.ZArray)
-	binary.Read(file, binary.LittleEndian, &p.MRange)
-	binary.Read(file, binary.LittleEndian, &p.MArray)
+	readMultiPointWithZ(file, &p.Box, &p.NumPoints, &p.Points, &p.ZRange, &p.ZArray, &p.MRange, &p.MArray)
 }
 
 func (p *MultiPointZ) write(file io.Writer) {
-	binary.Write(file, binary.LittleEndian, p.Box)
-	binary.Write(file, binary.LittleEndian, p.NumPoints)
-	binary.Write(file, binary.LittleEndian, p.Points)
-	binary.Write(file, binary.LittleEndian, p.ZRange)
-	binary.Write(file, binary.LittleEndian, p.ZArray)
-	binary.Write(file, binary.LittleEndian, p.MRange)
-	binary.Write(file, binary.LittleEndian, p.MArray)
+	writeMultiPointWithZ(file, p.Box, p.NumPoints, p.Points, p.ZRange, p.ZArray, p.MRange, p.MArray)
 }
 
 // PointM is a point with a measure.
@@ -431,7 +470,8 @@ func (p *PointM) read(file io.Reader) {
 }
 
 func (p *PointM) write(file io.Writer) {
-	binary.Write(file, binary.LittleEndian, p)
+	ew := &errWriter{Writer: file}
+	writeLE(ew, p)
 }
 
 // PolyLineM is the polyline in which each point also has a measure.
@@ -489,21 +529,11 @@ func (p MultiPointM) BBox() Box {
 }
 
 func (p *MultiPointM) read(file io.Reader) {
-	binary.Read(file, binary.LittleEndian, &p.Box)
-	binary.Read(file, binary.LittleEndian, &p.NumPoints)
-	p.Points = make([]Point, p.NumPoints)
-	p.MArray = make([]float64, p.NumPoints)
-	binary.Read(file, binary.LittleEndian, &p.Points)
-	binary.Read(file, binary.LittleEndian, &p.MRange)
-	binary.Read(file, binary.LittleEndian, &p.MArray)
+	readMultiPointWithM(file, &p.Box, &p.NumPoints, &p.Points, &p.MRange, &p.MArray)
 }
 
 func (p *MultiPointM) write(file io.Writer) {
-	binary.Write(file, binary.LittleEndian, p.Box)
-	binary.Write(file, binary.LittleEndian, p.NumPoints)
-	binary.Write(file, binary.LittleEndian, p.Points)
-	binary.Write(file, binary.LittleEndian, p.MRange)
-	binary.Write(file, binary.LittleEndian, p.MArray)
+	writeMultiPointWithM(file, p.Box, p.NumPoints, p.Points, p.MRange, p.MArray)
 }
 
 // MultiPatch consists of a number of surfaces patches. Each surface path
@@ -547,16 +577,17 @@ func (p *MultiPatch) read(file io.Reader) {
 }
 
 func (p *MultiPatch) write(file io.Writer) {
-	binary.Write(file, binary.LittleEndian, p.Box)
-	binary.Write(file, binary.LittleEndian, p.NumParts)
-	binary.Write(file, binary.LittleEndian, p.NumPoints)
-	binary.Write(file, binary.LittleEndian, p.Parts)
-	binary.Write(file, binary.LittleEndian, p.PartTypes)
-	binary.Write(file, binary.LittleEndian, p.Points)
-	binary.Write(file, binary.LittleEndian, p.ZRange)
-	binary.Write(file, binary.LittleEndian, p.ZArray)
-	binary.Write(file, binary.LittleEndian, p.MRange)
-	binary.Write(file, binary.LittleEndian, p.MArray)
+	ew := &errWriter{Writer: file}
+	writeLE(ew, p.Box)
+	writeLE(ew, p.NumParts)
+	writeLE(ew, p.NumPoints)
+	writeLE(ew, p.Parts)
+	writeLE(ew, p.PartTypes)
+	writeLE(ew, p.Points)
+	writeLE(ew, p.ZRange)
+	writeLE(ew, p.ZArray)
+	writeLE(ew, p.MRange)
+	writeLE(ew, p.MArray)
 }
 
 // Field representation of a field object in the DBF file

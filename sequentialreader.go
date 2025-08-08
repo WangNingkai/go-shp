@@ -1,10 +1,8 @@
 package shp
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
-	"math"
 	"strings"
 )
 
@@ -75,47 +73,40 @@ type seqReader struct {
 // Read and parse headers in the Shapefile. This will fill out GeometryType,
 // filelength and bbox.
 func (sr *seqReader) readHeaders() {
-	// contrary to Reader.readHeaders we cannot seek with the ReadCloser, so we
-	// need to trust the filelength in the header
-
-	er := &errReader{Reader: sr.shp}
-	// shp headers
-	_, _ = io.CopyN(io.Discard, er, 24)
-	var l int32
-	_ = binary.Read(er, binary.BigEndian, &l)
-	sr.filelength = int64(l) * 2
-	_, _ = io.CopyN(io.Discard, er, 4)
-	_ = binary.Read(er, binary.LittleEndian, &sr.geometryType)
-	sr.bbox.MinX = readFloat64(er)
-	sr.bbox.MinY = readFloat64(er)
-	sr.bbox.MaxX = readFloat64(er)
-	sr.bbox.MaxY = readFloat64(er)
-	_, _ = io.CopyN(io.Discard, er, 32) // skip four float64: Zmin, Zmax, Mmin, Max
-	if er.e != nil {
-		sr.err = fmt.Errorf("Error when reading SHP header: %v", er.e)
+	// contrary to Reader.readHeaders we cannot seek with ReadCloser
+	fl, geom, bbox, err := readShpHeaderReader(sr.shp)
+	if err != nil {
+		sr.err = fmt.Errorf("Error when reading SHP header: %v", err)
 		return
 	}
+	sr.filelength = fl
+	sr.geometryType = geom
+	sr.bbox = bbox
 
 	// dbf header
-	er = &errReader{Reader: sr.dbf}
+	er := &errReader{Reader: sr.dbf}
 	if sr.dbf == nil {
 		return
 	}
 	_, _ = io.CopyN(io.Discard, er, 4)
-	binary.Read(er, binary.LittleEndian, &sr.dbfNumRecords)
-	binary.Read(er, binary.LittleEndian, &sr.dbfHeaderLength)
-	binary.Read(er, binary.LittleEndian, &sr.dbfRecordLength)
-	_, _ = io.CopyN(io.Discard, er, 20) // skip padding
-	numFields := int(math.Floor(float64(sr.dbfHeaderLength-33) / 32.0))
-	sr.dbfFields = make([]Field, numFields)
-	binary.Read(er, binary.LittleEndian, &sr.dbfFields)
+	readLE(er, &sr.dbfNumRecords)
+	readLE(er, &sr.dbfHeaderLength)
+	readLE(er, &sr.dbfRecordLength)
+	_, _ = io.CopyN(io.Discard, er, dbfHeaderPaddingLen) // skip padding
+	numFields := calcNumFields(sr.dbfHeaderLength)
+	if fields, e := readDbfFields(er, numFields); e != nil {
+		sr.err = fmt.Errorf("Error when reading DBF fields: %v", e)
+		return
+	} else {
+		sr.dbfFields = fields
+	}
 	buf := make([]byte, 1)
 	_, _ = er.Read(buf)
 	if er.e != nil {
 		sr.err = fmt.Errorf("Error when reading DBF header: %v", er.e)
 		return
 	}
-	if buf[0] != 0x0d {
+	if buf[0] != dbfFieldTerminator {
 		sr.err = fmt.Errorf("Field descriptor array terminator not found")
 		return
 	}
@@ -127,18 +118,11 @@ func (sr *seqReader) Next() bool {
 	if sr.err != nil {
 		return false
 	}
-	var num, size int32
-	var shapetype ShapeType
-
 	// read shape
-	er := &errReader{Reader: sr.shp}
-	binary.Read(er, binary.BigEndian, &num)
-	binary.Read(er, binary.BigEndian, &size)
-	binary.Read(er, binary.LittleEndian, &shapetype)
-
-	if er.e != nil {
-		if er.e != io.EOF {
-			sr.err = fmt.Errorf("Error when reading shapefile header: %v", er.e)
+	num, size, shapetype, herr := readShapeRecordHeader(sr.shp)
+	if herr != nil {
+		if herr != io.EOF {
+			sr.err = fmt.Errorf("Error when reading shapefile header: %v", herr)
 		} else {
 			sr.err = io.EOF
 		}
@@ -151,6 +135,7 @@ func (sr *seqReader) Next() bool {
 		sr.err = fmt.Errorf("Error decoding shape type: %v", err)
 		return false
 	}
+	er := &errReader{Reader: sr.shp}
 	sr.shape.read(er)
 	switch {
 	case er.e == io.EOF:
@@ -162,7 +147,10 @@ func (sr *seqReader) Next() bool {
 		sr.err = fmt.Errorf("Error while reading next shape: %v", er.e)
 		return false
 	}
-	skipBytes := int64(size)*2 + 8 - er.n
+	// size is content length in 16-bit words and includes the 4-byte shapetype.
+	// We've already read shapetype separately and er.n counts only bytes read by shape.read.
+	// Thus we need to skip the remaining content bytes: size*2 - 4 - er.n.
+	skipBytes := int64(size)*2 - 4 - er.n
 	_, ce := io.CopyN(io.Discard, er, skipBytes)
 	if er.e != nil {
 		sr.err = er.e
@@ -176,7 +164,7 @@ func (sr *seqReader) Next() bool {
 		sr.err = fmt.Errorf("Error when reading DBF row: %v", err)
 		return false
 	}
-	if sr.dbfRow[0] != 0x20 && sr.dbfRow[0] != 0x2a {
+	if sr.dbfRow[0] != dbfDeletionFlagNotDeleted && sr.dbfRow[0] != dbfDeletionFlagDeleted {
 		sr.err = fmt.Errorf("Attribute row %d starts with incorrect deletion indicator", num)
 	}
 	return sr.err == nil
@@ -192,12 +180,8 @@ func (sr *seqReader) Attribute(n int) string {
 	if sr.err != nil {
 		return ""
 	}
-	start := 1
-	f := 0
-	for ; f < n; f++ {
-		start += int(sr.dbfFields[f].Size)
-	}
-	s := string(sr.dbfRow[start : start+int(sr.dbfFields[f].Size)])
+	start := dbfFieldStartByte(sr.dbfFields, n)
+	s := string(sr.dbfRow[start : start+int(sr.dbfFields[n].Size)])
 	return strings.Trim(s, " ")
 }
 

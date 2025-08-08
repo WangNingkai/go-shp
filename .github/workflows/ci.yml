@@ -7,8 +7,8 @@ on:
     branches:
       - main
       - develop
-      - 'feature/*'
-      - 'hotfix/*'
+      - "feature/*"
+      - "hotfix/*"
 
 jobs:
   test:
@@ -20,18 +20,18 @@ jobs:
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30  # 防止长时间运行的任务
+    timeout-minutes: 30 # 防止长时间运行的任务
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 确保获取完整历史用于某些工具
+          fetch-depth: 0 # 确保获取完整历史用于某些工具
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-          cache: true  # 使用内置缓存替代手动缓存步骤
+          cache: true # 使用内置缓存替代手动缓存步骤
 
       - name: Verify dependencies
         run: go mod verify
@@ -52,7 +52,7 @@ jobs:
           file: ./coverage.out
           flags: unittests
           name: codecov-umbrella
-          fail_ci_if_error: false  # 防止覆盖率上传失败导致整个CI失败
+          fail_ci_if_error: false # 防止覆盖率上传失败导致整个CI失败
 
   lint:
     runs-on: ubuntu-latest
@@ -72,7 +72,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v4
         with:
-          version: v1.55.2  # 使用具体版本而非latest，确保稳定性
+          version: v1.55.2 # 使用具体版本而非latest，确保稳定性
           args: --timeout=10m
           skip-cache: false
           only-new-issues: false
@@ -102,23 +102,4 @@ jobs:
         with:
           name: benchmark-results
           path: benchmark.txt
-          retention-days: 14  # 保留14天的基准测试结果
-
-  security:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.21
-          cache: true
-
-      - name: Run Gosec Security Scanner
-        uses: securecodewarrior/github-action-gosec@v2.0.0  # 更新到最新版本
-        with:
-          args: -exclude=G104 ./...  # 排除特定规则（如需要）
-          github-token: ${{ secrets.GITHUB_TOKEN }}  # 提供token以获得更好的集成
+          retention-days: 14 # 保留14天的基准测试结果

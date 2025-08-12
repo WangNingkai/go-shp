@@ -24,6 +24,23 @@ func ConvertShapefileToGeoJSON(shapefilePath, geojsonPath string) error {
 	return nil
 }
 
+// ConvertShapefileToGeoJSONString 将 Shapefile 转换为 GeoJSON 字符串.
+func ConvertShapefileToGeoJSONString(shapefilePath string) (string, error) {
+	converter := GeoJSONConverter{}
+
+	geoJSON, err := converter.ShapefileToGeoJSON(shapefilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert shapefile to GeoJSON: %v", err)
+	}
+
+	data, err := json.MarshalIndent(geoJSON, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal GeoJSON to string: %v", err)
+	}
+
+	return string(data), nil
+}
+
 // ConvertGeoJSONToShapefile 将 GeoJSON 文件转换为 Shapefile.
 func ConvertGeoJSONToShapefile(geojsonPath, shapefilePath string) error {
 	converter := GeoJSONConverter{}

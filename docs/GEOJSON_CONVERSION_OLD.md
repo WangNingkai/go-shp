@@ -267,6 +267,65 @@ func batchWithProgress() {
 }
 ```
 
+### 5. 错误处理和验证
+
+#### 完整的错误处理
+```go
+func robustConversion(inputFile, outputFile string) {
+    err := shp.ConvertShapefileToGeoJSON(inputFile, outputFile)
+    if err != nil {
+        // 详细的错误类型判断
+        switch {
+        case strings.Contains(err.Error(), "no such file"):
+            fmt.Printf("❌ 文件不存在: %s\n", inputFile)
+        case strings.Contains(err.Error(), "unsupported geometry"):
+            fmt.Println("❌ 包含不支持的几何类型")
+        case strings.Contains(err.Error(), "corrupted"):
+            fmt.Println("❌ 文件已损坏")
+        case strings.Contains(err.Error(), "permission denied"):
+            fmt.Println("❌ 文件权限不足")
+        default:
+            fmt.Printf("❌ 转换失败: %v\n", err)
+        }
+        return
+    }
+    
+    fmt.Printf("✅ 转换成功: %s → %s\n", inputFile, outputFile)
+}
+```
+
+#### 转换前验证
+```go
+func validateBeforeConversion(filename string) bool {
+    // 检查文件是否存在
+    if _, err := os.Stat(filename); os.IsNotExist(err) {
+        fmt.Printf("❌ 文件不存在: %s\n", filename)
+        return false
+    }
+    
+    // 检查文件格式
+    ext := strings.ToLower(filepath.Ext(filename))
+    if ext != ".shp" && ext != ".geojson" {
+        fmt.Printf("❌ 不支持的文件格式: %s\n", ext)
+        return false
+    }
+    
+    // 对于 Shapefile，检查相关文件
+    if ext == ".shp" {
+        baseName := strings.TrimSuffix(filename, ".shp")
+        requiredFiles := []string{".shx", ".dbf"}
+        
+        for _, reqExt := range requiredFiles {
+            if _, err := os.Stat(baseName + reqExt); os.IsNotExist(err) {
+                fmt.Printf("⚠️  缺少相关文件: %s%s\n", baseName, reqExt)
+            }
+        }
+    }
+    
+    return true
+}
+```
+
 ## 🔧 命令行工具使用
 
 ### 安装方式
@@ -685,6 +744,82 @@ func validateShapefileIntegrity(shpPath string) error {
 }
 ```
 
+### 性能和内存注意事项
+
+#### 大文件处理建议
+```go
+// ✅ 推荐：流式处理大文件
+func processLargeShapefile(filename string) error {
+    reader, err := shp.Open(filename,
+        shp.WithBuffering(true, 64*1024),     // 64KB 缓冲
+        shp.WithMaxMemoryUsage(50*1024*1024), // 50MB 内存限制
+    )
+    if err != nil {
+        return err
+    }
+    defer reader.Close()
+    
+    // 分批处理，避免内存溢出
+    const batchSize = 1000
+    count := 0
+    
+    for reader.Next() {
+        // 处理单个记录
+        if count++; count%batchSize == 0 {
+            runtime.GC() // 定期垃圾回收
+        }
+    }
+    
+    return nil
+}
+```
+
+#### 内存使用监控
+```go
+func monitorMemoryUsage() {
+    var m runtime.MemStats
+    runtime.ReadMemStats(&m)
+    
+    fmt.Printf("已分配内存: %d KB\n", bToKb(m.Alloc))
+    fmt.Printf("总分配内存: %d KB\n", bToKb(m.TotalAlloc))
+    fmt.Printf("系统内存: %d KB\n", bToKb(m.Sys))
+    fmt.Printf("GC 次数: %d\n", m.NumGC)
+}
+
+func bToKb(b uint64) uint64 {
+    return b / 1024
+}
+```
+
+### 字符编码处理
+
+#### 中文字符支持
+```go
+// 处理不同编码的 Shapefile
+reader, err := shp.Open("chinese_data.shp", 
+    shp.WithEncoding("GBK"), // 指定原始编码
+)
+
+// 转换时保持UTF-8编码
+converter := shp.GeoJSONConverter{
+    OutputEncoding: "UTF-8",
+}
+```
+
+#### 编码检测
+```go
+func detectEncoding(filename string) string {
+    // 检查 .cpg 文件
+    cpgFile := strings.Replace(filename, ".shp", ".cpg", 1)
+    if content, err := os.ReadFile(cpgFile); err == nil {
+        return strings.TrimSpace(string(content))
+    }
+    
+    // 默认返回 UTF-8
+    return "UTF-8"
+}
+```
+
 ## 🔧 故障排除和错误处理
 
 ### 常见错误及解决方案
@@ -907,152 +1042,140 @@ func convertWithEncoding(input, output string) error {
 }
 ```
 
-## 📚 实际应用场景
+### 调试和日志
 
-### 1. Web 地图应用
-
-#### 将传统 GIS 数据发布到 Web
+#### 启用详细日志
 ```go
-// 批量转换政府公开的 Shapefile 数据
-func convertGovernmentData() {
-    datasets := []string{
-        "行政区划.shp",
-        "道路网络.shp", 
-        "兴趣点POI.shp",
-        "土地利用.shp",
+import "log"
+
+func enableDebugLogging() {
+    log.SetFlags(log.LstdFlags | log.Lshortfile)
+    
+    // 设置日志级别
+    shp.SetLogLevel(shp.LogLevelDebug)
+    
+    // 自定义日志输出
+    logFile, _ := os.OpenFile("conversion.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+    log.SetOutput(logFile)
+}
+```
+
+#### 性能分析
+```go
+import _ "net/http/pprof"
+import "net/http"
+
+func enableProfiling() {
+    go func() {
+        log.Println(http.ListenAndServe("localhost:6060", nil))
+    }()
+    
+    // 访问 http://localhost:6060/debug/pprof/ 查看性能数据
+}
+```
+
+### 数据验证工具
+
+#### 几何验证
+```go
+func validateGeometry(shape shp.Shape) error {
+    validator := &shp.DefaultValidator{}
+    return validator.Validate(shape)
+}
+
+func validateGeoJSONOutput(filename string) error {
+    file, err := os.Open(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+    
+    var geoJSON map[string]interface{}
+    if err := json.NewDecoder(file).Decode(&geoJSON); err != nil {
+        return fmt.Errorf("无效的 JSON 格式: %v", err)
     }
     
-    for _, dataset := range datasets {
-        outputFile := strings.Replace(dataset, ".shp", ".geojson", 1)
-        
-        // 转换为 Web 友好的 GeoJSON
-        err := shp.ConvertShapefileToGeoJSON(dataset, outputFile)
-        if err != nil {
-            log.Printf("转换失败 %s: %v", dataset, err)
+    // 检查 GeoJSON 结构
+    if geoJSON["type"] != "FeatureCollection" {
+        return fmt.Errorf("不是有效的 FeatureCollection")
+    }
+    
+    features, ok := geoJSON["features"].([]interface{})
+    if !ok {
+        return fmt.Errorf("features 字段无效")
+    }
+    
+    log.Printf("✅ GeoJSON 验证通过，包含 %d 个要素", len(features))
+    return nil
+}
+```
+
+### 恢复和重试机制
+
+#### 自动重试
+```go
+func convertWithRetry(input, output string, maxRetries int) error {
+    var lastErr error
+    
+    for i := 0; i < maxRetries; i++ {
+        if err := shp.ConvertShapefileToGeoJSON(input, output); err != nil {
+            lastErr = err
+            log.Printf("第 %d 次尝试失败: %v", i+1, err)
+            
+            // 指数退避
+            time.Sleep(time.Duration(1<<i) * time.Second)
             continue
         }
         
-        // 压缩文件以减少传输大小
-        compressGeoJSON(outputFile)
-        log.Printf("✅ 转换完成: %s", outputFile)
-    }
-}
-
-func compressGeoJSON(filename string) {
-    // 使用 gzip 压缩
-    input, _ := os.Open(filename)
-    defer input.Close()
-    
-    output, _ := os.Create(filename + ".gz")
-    defer output.Close()
-    
-    gzWriter := gzip.NewWriter(output)
-    defer gzWriter.Close()
-    
-    io.Copy(gzWriter, input)
-}
-```
-
-#### 前端代码集成
-```javascript
-// 在前端使用转换后的 GeoJSON
-fetch('api/data/行政区划.geojson')
-  .then(response => response.json())
-  .then(geojson => {
-    // 使用 Leaflet 显示
-    L.geoJSON(geojson, {
-      style: {
-        color: '#ff7800',
-        weight: 2,
-        opacity: 0.65
-      }
-    }).addTo(map);
-  });
-```
-
-### 2. 数据分析和统计
-
-#### 空间数据统计分析
-```go
-func analyzeUrbanData() {
-    // 转换人口统计数据
-    err := shp.ConvertShapefileToGeoJSON("人口普查.shp", "population.geojson")
-    if err != nil {
-        log.Fatal(err)
-    }
-    
-    // 读取转换后的数据进行分析
-    geoJSON, err := loadGeoJSON("population.geojson")
-    if err != nil {
-        log.Fatal(err)
-    }
-    
-    // 统计分析
-    stats := analyzePopulationData(geoJSON)
-    fmt.Printf("统计结果:\n%s", stats.Report())
-}
-
-type PopulationStats struct {
-    TotalPopulation int64
-    AvgDensity     float64
-    MaxDensity     float64
-    UrbanRatio     float64
-}
-
-func analyzePopulationData(geoJSON *shp.GeoJSON) *PopulationStats {
-    var totalPop int64
-    var totalArea float64
-    var maxDensity float64
-    
-    for _, feature := range geoJSON.Features {
-        if pop, ok := feature.Properties["population"].(float64); ok {
-            if area, ok := feature.Properties["area_km2"].(float64); ok {
-                density := pop / area
-                totalPop += int64(pop)
-                totalArea += area
-                
-                if density > maxDensity {
-                    maxDensity = density
-                }
-            }
+        // 验证输出文件
+        if err := validateGeoJSONOutput(output); err != nil {
+            log.Printf("输出文件验证失败: %v", err)
+            os.Remove(output) // 删除损坏的文件
+            continue
         }
+        
+        return nil // 成功
     }
     
-    return &PopulationStats{
-        TotalPopulation: totalPop,
-        AvgDensity:     float64(totalPop) / totalArea,
-        MaxDensity:     maxDensity,
-        UrbanRatio:     calculateUrbanRatio(geoJSON),
-    }
+    return fmt.Errorf("重试 %d 次后仍然失败: %v", maxRetries, lastErr)
 }
 ```
 
-## 🔗 相关资源
+### 错误上报和监控
 
-### 官方文档
-- [GitHub 仓库](https://github.com/wangningkai/go-shp)
-- [API 文档](https://godoc.org/github.com/wangningkai/go-shp)
-- [发布说明](https://github.com/wangningkai/go-shp/releases)
+#### 错误统计
+```go
+type ConversionStats struct {
+    TotalFiles    int
+    SuccessCount  int
+    FailureCount  int
+    Errors        []error
+    StartTime     time.Time
+    EndTime       time.Time
+}
 
-### 相关标准
-- [Shapefile 技术描述](https://www.esri.com/library/whitepapers/pdfs/shapefile.pdf)
-- [GeoJSON 规范 (RFC 7946)](https://tools.ietf.org/html/rfc7946)
-- [DBF 文件格式](http://www.dbase.com/Knowledgebase/INT/db7_file_fmt.htm)
+func (s *ConversionStats) AddError(err error) {
+    s.Errors = append(s.Errors, err)
+    s.FailureCount++
+}
 
-### 工具和库
-- [GDAL/OGR](https://gdal.org/) - 地理数据抽象库
-- [PostGIS](https://postgis.net/) - PostgreSQL 空间数据库扩展
-- [QGIS](https://qgis.org/) - 开源 GIS 软件
+func (s *ConversionStats) AddSuccess() {
+    s.SuccessCount++
+}
 
-### 社区和支持
-- [Issues](https://github.com/wangningkai/go-shp/issues) - 问题反馈
-- [Discussions](https://github.com/wangningkai/go-shp/discussions) - 社区讨论
-- [Stack Overflow](https://stackoverflow.com/questions/tagged/go-shp) - 技术问答
-
----
-
-📝 **文档更新**: 2025年8月15日  
-🔄 **库版本**: v1.2.0+  
-📧 **维护者**: [WangNingkai](https://github.com/WangNingkai)
-
-> 💡 **提示**: 如果您发现文档中的错误或有改进建议，欢迎提交 [Issue](https://github.com/wangningkai/go-shp/issues) 或 [Pull Request](https://github.com/wangningkai/go-shp/pulls)！
+func (s *ConversionStats) Report() string {
+    duration := s.EndTime.Sub(s.StartTime)
+    successRate := float64(s.SuccessCount) / float64(s.TotalFiles) * 100
+    
+    return fmt.Sprintf(`
+转换统计报告:
+- 总文件数: %d
+- 成功: %d (%.1f%%)
+- 失败: %d
+- 耗时: %v
+- 平均每文件: %v
+`,
+        s.TotalFiles, s.SuccessCount, successRate, s.FailureCount,
+        duration, duration/time.Duration(s.TotalFiles))
+}
+```

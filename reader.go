@@ -1,10 +1,8 @@
 package shp
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,12 +92,6 @@ func (r *Reader) readHeaders() error {
 	r.GeometryType = geom
 	r.bbox = bbox
 	return nil
-}
-
-func readFloat64(r io.Reader) float64 {
-	var bits uint64
-	_ = binary.Read(r, binary.LittleEndian, &bits)
-	return math.Float64frombits(bits)
 }
 
 // Close closes the Shapefile.

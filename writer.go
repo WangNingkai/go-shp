@@ -101,10 +101,7 @@ func openAndInitWriter(filename string) (*Writer, *os.File, string, error) {
 		return nil, nil, "", fmt.Errorf("cannot read geometry type: %v", err)
 	}
 	er := &errReader{Reader: shp}
-	w.bbox.MinX = readFloat64(er)
-	w.bbox.MinY = readFloat64(er)
-	w.bbox.MaxX = readFloat64(er)
-	w.bbox.MaxY = readFloat64(er)
+	w.bbox = readBBox(er)
 	if er.e != nil {
 		return nil, nil, "", fmt.Errorf("cannot read bounding box: %v", er.e)
 	}

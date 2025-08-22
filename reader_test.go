@@ -6,18 +6,6 @@ import (
 	"testing"
 )
 
-func pointsEqual(a, b []float64) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for k, v := range a {
-		if v != b[k] {
-			return false
-		}
-	}
-	return true
-}
-
 func getShapesFromFile(prefix string, t *testing.T) (shapes []Shape) {
 	filename := prefix + ".shp"
 	file, err := Open(filename)

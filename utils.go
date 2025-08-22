@@ -158,7 +158,8 @@ type AttributeStats struct {
 	NullValues   int
 	MinLength    int
 	MaxLength    int
-	Values       []string // 用于唯一值统计
+	Values       []string            // 用于唯一值统计
+	valueSet     map[string]struct{} // 内部使用的 set，加快查找速度
 }
 
 // AnalyzeShapefile 分析Shapefile并返回统计信息
@@ -227,6 +228,7 @@ func (s *statisticsCollector) initializeAttributeStats() {
 			MinLength: math.MaxInt32,
 			MaxLength: 0,
 			Values:    make([]string, 0),
+			valueSet:  make(map[string]struct{}), // 初始化 valueSet
 		}
 	}
 }
@@ -302,13 +304,15 @@ func (s *statisticsCollector) updateUniqueValues(fieldStats *AttributeStats, att
 		return
 	}
 
-	for _, val := range fieldStats.Values {
-		if val == attr {
-			return // Already exists
-		}
+	// 使用 map 快速检查是否已存在
+	if fieldStats.valueSet == nil {
+		fieldStats.valueSet = make(map[string]struct{})
 	}
 
-	fieldStats.Values = append(fieldStats.Values, attr)
+	if _, exists := fieldStats.valueSet[attr]; !exists {
+		fieldStats.valueSet[attr] = struct{}{}
+		fieldStats.Values = append(fieldStats.Values, attr)
+	}
 }
 
 // finalizeStatistics calculates final statistics

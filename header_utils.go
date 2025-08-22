@@ -21,11 +21,7 @@ func readShpHeaderSeeker(rs io.ReadSeeker) (int64, ShapeType, Box, error) {
 	_, _ = rs.Seek(shpOffsetToGeomType, io.SeekStart)
 	var geom ShapeType
 	readLE(er, &geom)
-	var bbox Box
-	bbox.MinX = readFloat64(er)
-	bbox.MinY = readFloat64(er)
-	bbox.MaxX = readFloat64(er)
-	bbox.MaxY = readFloat64(er)
+	bbox := readBBox(er)
 	_, _ = rs.Seek(shpHeaderLen, io.SeekStart)
 	return filelength, geom, bbox, er.e
 }
@@ -43,11 +39,7 @@ func readShpHeaderReader(r io.Reader) (int64, ShapeType, Box, error) {
 	_, _ = io.CopyN(io.Discard, er, 4)
 	var geom ShapeType
 	readLE(er, &geom)
-	var bbox Box
-	bbox.MinX = readFloat64(er)
-	bbox.MinY = readFloat64(er)
-	bbox.MaxX = readFloat64(er)
-	bbox.MaxY = readFloat64(er)
+	bbox := readBBox(er)
 	// skip Z/M ranges (4 float64)
 	_, _ = io.CopyN(io.Discard, er, shpZMRangesLen)
 	return filelength, geom, bbox, er.e

@@ -85,6 +85,7 @@ jobs:
           install-mode: "binary"
           verify: false
           skip-cache: true
+          args: --disable=unused
 
   benchmark:
     runs-on: ubuntu-latest

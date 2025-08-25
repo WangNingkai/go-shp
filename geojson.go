@@ -260,10 +260,22 @@ func (c GeoJSONConverter) ShapefileToGeoJSON(filename string) (*GeoJSON, error) 
 		n, shape := reader.Shape()
 
 		// Get attributes
-		properties := make(map[string]interface{})
+		properties := make(map[string]interface{}, len(fields))
 		for i, field := range fields {
 			attr := reader.ReadAttribute(n, i)
-			properties[field.String()] = attr
+			if attr == "" {
+				properties[field.String()] = nil
+				continue
+			}
+			if iVal, err := strconv.ParseInt(attr, 10, 64); err == nil {
+				properties[field.String()] = iVal
+			} else if fVal, err := strconv.ParseFloat(attr, 64); err == nil {
+				properties[field.String()] = fVal
+			} else if attr == "true" || attr == "false" {
+				properties[field.String()] = (attr == "true")
+			} else {
+				properties[field.String()] = attr
+			}
 		}
 
 		feature, err := c.FeatureToGeoJSON(shape, properties)

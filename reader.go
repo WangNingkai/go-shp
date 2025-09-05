@@ -22,7 +22,8 @@ type Reader struct {
 	num        int32
 	filename   string
 	filelength int64
-
+	// 调试用
+	shapeCount      int
 	dbf             readSeekCloser
 	dbfFields       []Field
 	dbfNumRecords   int32
@@ -88,6 +89,20 @@ func (r *Reader) readHeaders() error {
 	if err != nil {
 		return err
 	}
+
+	// 获取实际文件大小
+	stat, err := r.shp.(*os.File).Stat()
+	if err != nil {
+		return fmt.Errorf("failed to get file stats: %v", err)
+	}
+	actualSize := stat.Size()
+
+	fmt.Printf("Header reports file length: %d bytes, actual file size: %d bytes\n", fl, actualSize)
+
+	if fl > actualSize {
+		return fmt.Errorf("header reports file length %d but actual file size is %d", fl, actualSize)
+	}
+
 	r.filelength = fl
 	r.GeometryType = geom
 	r.bbox = bbox
@@ -150,7 +165,10 @@ func newShape(shapetype ShapeType) (Shape, error) {
 // will then be available through the Shape method. It
 // returns false when the reader has reached the end of the
 // file or encounters an error.
+
 func (r *Reader) Next() bool {
+	r.shapeCount++
+	fmt.Printf("Processing shape #%d\n", r.shapeCount)
 	cur, _ := r.shp.Seek(0, io.SeekCurrent)
 	if cur >= r.filelength {
 		return false
@@ -158,30 +176,102 @@ func (r *Reader) Next() bool {
 
 	num, size, shapetype, err := readShapeRecordHeader(r.shp)
 	if err != nil {
-		if err != io.EOF {
-			r.err = fmt.Errorf("Error when reading metadata of next shape: %v", err)
-		} else {
-			r.err = io.EOF
+		if err == io.EOF {
+			return false // 正常结束，不设置错误
 		}
+		r.err = fmt.Errorf("Error when reading metadata of next shape: %v", err)
 		return false
 	}
+
+	// 添加调试信息
+	fmt.Printf("Reading shape %d: size=%d, type=%v, position=%d\n", num, size, shapetype, cur)
+
+	// 检查记录大小是否合理
+	if size < 0 {
+		r.err = fmt.Errorf("Invalid negative shape record size: %d at position %d", size, cur)
+		return false
+	}
+
+	// 检查是否有足够的数据可读
+	expectedEndPos := cur + int64(size)*2 + 8
+	if expectedEndPos > r.filelength {
+		r.err = fmt.Errorf("Shape record extends beyond file: expected end %d, file length %d", expectedEndPos, r.filelength)
+		return false
+	}
+
 	r.num = num
 	r.shape, err = newShape(shapetype)
 	if err != nil {
 		r.err = fmt.Errorf("Error decoding shape type: %v", err)
 		return false
 	}
+
+	// 在读取前记录当前位置
+	beforeRead, _ := r.shp.Seek(0, io.SeekCurrent)
+	fmt.Printf("About to read shape data at position %d\n", beforeRead)
+
 	er := &errReader{Reader: r.shp}
 	r.shape.read(er)
 	if er.e != nil {
-		r.err = fmt.Errorf("Error while reading next shape: %v", er.e)
+		if er.e == io.EOF {
+			r.err = fmt.Errorf("Unexpected end of file while reading shape %d at position %d", num, beforeRead)
+		} else {
+			r.err = fmt.Errorf("Error while reading shape %d: %v", num, er.e)
+		}
 		return false
 	}
 
+	// 验证读取后的位置
+	afterRead, _ := r.shp.Seek(0, io.SeekCurrent)
+	expectedPos := beforeRead + int64(size)*2
+	if afterRead != expectedPos {
+		fmt.Printf("Warning: position mismatch after reading shape %d. Expected: %d, Actual: %d\n",
+			num, expectedPos, afterRead)
+	}
+
 	// move to next object
-	_, _ = r.shp.Seek(int64(size)*2+cur+8, 0)
+	nextPos := cur + int64(size)*2 + 8
+	_, err = r.shp.Seek(nextPos, 0)
+	if err != nil {
+		r.err = fmt.Errorf("Error seeking to next position %d: %v", nextPos, err)
+		return false
+	}
+
 	return true
 }
+
+// func (r *Reader) Next() bool {
+// 	cur, _ := r.shp.Seek(0, io.SeekCurrent)
+// 	if cur >= r.filelength {
+// 		return false
+// 	}
+
+// 	num, size, shapetype, err := readShapeRecordHeader(r.shp)
+// 	if err != nil {
+// 		if err != io.EOF {
+// 			r.err = fmt.Errorf("Error when reading metadata of next shape: %v", err)
+// 		} else {
+// 			r.err = io.EOF
+// 		}
+// 		return false
+// 	}
+// 	r.num = num
+// 	r.shape, err = newShape(shapetype)
+// 	if err != nil {
+// 		r.err = fmt.Errorf("Error decoding shape type: %v", err)
+// 		return false
+// 	}
+// 	er := &errReader{Reader: r.shp}
+// 	r.shape.read(er)
+// 	if er.e != nil {
+// 		r.err = fmt.Errorf("Error while reading next shape: %v", er.e)
+// 		return false
+// 	}
+
+// 	// move to next object
+// 	_, _ = r.shp.Seek(int64(size)*2+cur+8, 0)
+// 	return true
+// }
 
 // Opens DBF file using r.filename + "dbf". This method
 // will parse the header and fill out all dbf* values int

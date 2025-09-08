@@ -125,8 +125,30 @@ func readPolygonShapeWithZ(file io.Reader, box *Box, numParts *int32, numPoints 
 	readLE(er, points)
 	readLE(er, zRange)
 	readLE(er, zArray)
+
+	// Try to read M data, but don't fail if it's incomplete (common at file end)
+	beforeMRange := er.e
 	readLE(er, mRange)
+	if er.e != nil && beforeMRange == nil {
+		// M Range failed to read, probably at file end - reset error and use default values
+		er.e = nil
+		*mRange = [2]float64{0, 0}
+		// Fill M array with zeros
+		for i := range *mArray {
+			(*mArray)[i] = 0
+		}
+		return
+	}
+
+	beforeMArray := er.e
 	readLE(er, mArray)
+	if er.e != nil && beforeMArray == nil {
+		// M Array failed to read, probably at file end - reset error and use default values
+		er.e = nil
+		for i := range *mArray {
+			(*mArray)[i] = 0
+		}
+	}
 }
 
 // writePolygonShapeWithZ writes polygon-like shapes with Z and M arrays

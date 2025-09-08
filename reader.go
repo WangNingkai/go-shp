@@ -97,7 +97,9 @@ func (r *Reader) readHeaders() error {
 	}
 	actualSize := stat.Size()
 
-	fmt.Printf("Header reports file length: %d bytes, actual file size: %d bytes\n", fl, actualSize)
+	if r.config != nil && r.config.Debug {
+		fmt.Printf("Header reports file length: %d bytes, actual file size: %d bytes\n", fl, actualSize)
+	}
 
 	if fl > actualSize {
 		return fmt.Errorf("header reports file length %d but actual file size is %d", fl, actualSize)
@@ -168,7 +170,9 @@ func newShape(shapetype ShapeType) (Shape, error) {
 
 func (r *Reader) Next() bool {
 	r.shapeCount++
-	fmt.Printf("Processing shape #%d\n", r.shapeCount)
+	if r.config != nil && r.config.Debug {
+		fmt.Printf("Processing shape #%d\n", r.shapeCount)
+	}
 	cur, _ := r.shp.Seek(0, io.SeekCurrent)
 	if cur >= r.filelength {
 		return false
@@ -179,8 +183,10 @@ func (r *Reader) Next() bool {
 		if err == io.EOF {
 			return false // 正常结束，不设置错误
 		}
-		if r.config.IgnoreCorruptedShapes {
-			fmt.Printf("Warning: Error reading shape header, skipping: %v\n", err)
+		if r.config != nil && r.config.IgnoreCorruptedShapes {
+			if r.config.Debug {
+				fmt.Printf("Warning: Error reading shape header, skipping: %v\n", err)
+			}
 			return r.trySkipToNextValidShape(cur)
 		}
 		r.err = fmt.Errorf("Error when reading metadata of next shape: %v", err)
@@ -188,12 +194,16 @@ func (r *Reader) Next() bool {
 	}
 
 	// 添加调试信息
-	fmt.Printf("Reading shape %d: size=%d, type=%v, position=%d\n", num, size, shapetype, cur)
+	if r.config != nil && r.config.Debug {
+		fmt.Printf("Reading shape %d: size=%d, type=%v, position=%d\n", num, size, shapetype, cur)
+	}
 
 	// 检查记录大小是否合理
 	if size < 0 {
-		if r.config.IgnoreCorruptedShapes {
-			fmt.Printf("Warning: Invalid negative shape record size: %d at position %d, skipping\n", size, cur)
+		if r.config != nil && r.config.IgnoreCorruptedShapes {
+			if r.config.Debug {
+				fmt.Printf("Warning: Invalid negative shape record size: %d at position %d, skipping\n", size, cur)
+			}
 			return r.trySkipToNextValidShape(cur)
 		}
 		r.err = fmt.Errorf("Invalid negative shape record size: %d at position %d", size, cur)
@@ -203,8 +213,10 @@ func (r *Reader) Next() bool {
 	// 检查是否有足够的数据可读
 	expectedEndPos := cur + int64(size)*2 + 8
 	if expectedEndPos > r.filelength {
-		if r.config.IgnoreCorruptedShapes {
-			fmt.Printf("Warning: Shape record extends beyond file: expected end %d, file length %d, skipping\n", expectedEndPos, r.filelength)
+		if r.config != nil && r.config.IgnoreCorruptedShapes {
+			if r.config.Debug {
+				fmt.Printf("Warning: Shape record extends beyond file: expected end %d, file length %d, skipping\n", expectedEndPos, r.filelength)
+			}
 			return r.trySkipToNextValidShape(cur)
 		}
 		r.err = fmt.Errorf("Shape record extends beyond file: expected end %d, file length %d", expectedEndPos, r.filelength)
@@ -214,8 +226,10 @@ func (r *Reader) Next() bool {
 	r.num = num
 	r.shape, err = newShape(shapetype)
 	if err != nil {
-		if r.config.IgnoreCorruptedShapes {
-			fmt.Printf("Warning: Error decoding shape type: %v, skipping\n", err)
+		if r.config != nil && r.config.IgnoreCorruptedShapes {
+			if r.config.Debug {
+				fmt.Printf("Warning: Error decoding shape type: %v, skipping\n", err)
+			}
 			// Try to skip to next shape based on size
 			nextPos := cur + int64(size)*2 + 8
 			if nextPos <= r.filelength {
@@ -232,16 +246,22 @@ func (r *Reader) Next() bool {
 
 	// 在读取前记录当前位置
 	beforeRead, _ := r.shp.Seek(0, io.SeekCurrent)
-	fmt.Printf("About to read shape data at position %d\n", beforeRead)
+	if r.config != nil && r.config.Debug {
+		fmt.Printf("About to read shape data at position %d\n", beforeRead)
+	}
 
 	er := &errReader{Reader: r.shp}
 	r.shape.read(er)
 	if er.e != nil {
-		if r.config.IgnoreCorruptedShapes {
+		if r.config != nil && r.config.IgnoreCorruptedShapes {
 			if er.e == io.EOF {
-				fmt.Printf("Warning: Unexpected end of file while reading shape %d at position %d, skipping\n", num, beforeRead)
+				if r.config.Debug {
+					fmt.Printf("Warning: Unexpected end of file while reading shape %d at position %d, skipping\n", num, beforeRead)
+				}
 			} else {
-				fmt.Printf("Warning: Error while reading shape %d: %v, skipping\n", num, er.e)
+				if r.config.Debug {
+					fmt.Printf("Warning: Error while reading shape %d: %v, skipping\n", num, er.e)
+				}
 			}
 			// Try to skip to next shape based on size
 			nextPos := cur + int64(size)*2 + 8
@@ -265,16 +285,20 @@ func (r *Reader) Next() bool {
 	afterRead, _ := r.shp.Seek(0, io.SeekCurrent)
 	expectedPos := beforeRead + int64(size)*2
 	if afterRead != expectedPos {
-		fmt.Printf("Warning: position mismatch after reading shape %d. Expected: %d, Actual: %d\n",
-			num, expectedPos, afterRead)
+		if r.config != nil && r.config.Debug {
+			fmt.Printf("Warning: position mismatch after reading shape %d. Expected: %d, Actual: %d\n",
+				num, expectedPos, afterRead)
+		}
 	}
 
 	// move to next object
 	nextPos := cur + int64(size)*2 + 8
 	_, err = r.shp.Seek(nextPos, 0)
 	if err != nil {
-		if r.config.IgnoreCorruptedShapes {
-			fmt.Printf("Warning: Error seeking to next position %d: %v, skipping\n", nextPos, err)
+		if r.config != nil && r.config.IgnoreCorruptedShapes {
+			if r.config.Debug {
+				fmt.Printf("Warning: Error seeking to next position %d: %v, skipping\n", nextPos, err)
+			}
 			return false
 		}
 		r.err = fmt.Errorf("Error seeking to next position %d: %v", nextPos, err)
@@ -286,7 +310,9 @@ func (r *Reader) Next() bool {
 
 // trySkipToNextValidShape 尝试跳过损坏的shape，寻找下一个有效的shape
 func (r *Reader) trySkipToNextValidShape(currentPos int64) bool {
-	fmt.Printf("Attempting to skip corrupted shape and find next valid shape...\n")
+	if r.config != nil && r.config.Debug {
+		fmt.Printf("Attempting to skip corrupted shape and find next valid shape...\n")
+	}
 
 	// 从当前位置开始，以小步长前进寻找下一个有效的shape头
 	for pos := currentPos + 8; pos < r.filelength-8; pos += 4 {
@@ -307,7 +333,9 @@ func (r *Reader) trySkipToNextValidShape(currentPos int64) bool {
 
 			expectedEndPos := pos + int64(size)*2 + 8
 			if expectedEndPos <= r.filelength {
-				fmt.Printf("Found potential valid shape at position %d\n", pos)
+				if r.config != nil && r.config.Debug {
+					fmt.Printf("Found potential valid shape at position %d\n", pos)
+				}
 				// 重新定位到这个位置，让下一次Next()调用处理它
 				_, err = r.shp.Seek(pos, 0)
 				if err == nil {
@@ -317,7 +345,9 @@ func (r *Reader) trySkipToNextValidShape(currentPos int64) bool {
 		}
 	}
 
-	fmt.Printf("No more valid shapes found\n")
+	if r.config != nil && r.config.Debug {
+		fmt.Printf("No more valid shapes found\n")
+	}
 	return false
 }
 

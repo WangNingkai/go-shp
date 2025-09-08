@@ -101,6 +101,11 @@ func ConvertShapefileToGeoJSONSkipCorrupted(shapefilePath, geojsonPath string) e
 }
 
 func BatchConvertShapefilesToGeoJSON(inputDir, outputDir string) error {
+	return BatchConvertShapefilesToGeoJSONWithOptions(inputDir, outputDir, false)
+}
+
+// BatchConvertShapefilesToGeoJSONWithOptions 批量转换 Shapefile 到 GeoJSON，支持静默模式.
+func BatchConvertShapefilesToGeoJSONWithOptions(inputDir, outputDir string, silent bool) error {
 	// 查找所有 .shp 文件
 	shapefiles, err := filepath.Glob(filepath.Join(inputDir, "*.shp"))
 	if err != nil {
@@ -111,15 +116,21 @@ func BatchConvertShapefilesToGeoJSON(inputDir, outputDir string) error {
 		basename := strings.TrimSuffix(filepath.Base(shapefile), ".shp")
 		geojsonPath := filepath.Join(outputDir, basename+".geojson")
 
-		fmt.Printf("Converting %s to %s...\n", shapefile, geojsonPath)
+		if !silent {
+			fmt.Printf("Converting %s to %s...\n", shapefile, geojsonPath)
+		}
 
 		err := ConvertShapefileToGeoJSON(shapefile, geojsonPath)
 		if err != nil {
-			fmt.Printf("Error converting %s: %v\n", shapefile, err)
+			if !silent {
+				fmt.Printf("Error converting %s: %v\n", shapefile, err)
+			}
 			continue
 		}
 
-		fmt.Printf("Successfully converted %s\n", shapefile)
+		if !silent {
+			fmt.Printf("Successfully converted %s\n", shapefile)
+		}
 	}
 
 	return nil
@@ -127,6 +138,11 @@ func BatchConvertShapefilesToGeoJSON(inputDir, outputDir string) error {
 
 // BatchConvertGeoJSONsToShapefiles 批量转换 GeoJSON 到 Shapefile.
 func BatchConvertGeoJSONsToShapefiles(inputDir, outputDir string) error {
+	return BatchConvertGeoJSONsToShapefilesWithOptions(inputDir, outputDir, false)
+}
+
+// BatchConvertGeoJSONsToShapefilesWithOptions 批量转换 GeoJSON 到 Shapefile，支持静默模式.
+func BatchConvertGeoJSONsToShapefilesWithOptions(inputDir, outputDir string, silent bool) error {
 	// 查找所有 .geojson 文件
 	geojsonFiles, err := filepath.Glob(filepath.Join(inputDir, "*.geojson"))
 	if err != nil {
@@ -137,15 +153,21 @@ func BatchConvertGeoJSONsToShapefiles(inputDir, outputDir string) error {
 		basename := strings.TrimSuffix(filepath.Base(geojsonFile), ".geojson")
 		shapefilePath := filepath.Join(outputDir, basename+".shp")
 
-		fmt.Printf("Converting %s to %s...\n", geojsonFile, shapefilePath)
+		if !silent {
+			fmt.Printf("Converting %s to %s...\n", geojsonFile, shapefilePath)
+		}
 
 		err := ConvertGeoJSONToShapefile(geojsonFile, shapefilePath)
 		if err != nil {
-			fmt.Printf("Error converting %s: %v\n", geojsonFile, err)
+			if !silent {
+				fmt.Printf("Error converting %s: %v\n", geojsonFile, err)
+			}
 			continue
 		}
 
-		fmt.Printf("Successfully converted %s\n", geojsonFile)
+		if !silent {
+			fmt.Printf("Successfully converted %s\n", geojsonFile)
+		}
 	}
 
 	return nil

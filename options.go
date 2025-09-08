@@ -13,6 +13,8 @@ type ReaderConfig struct {
 	EnableBuffering bool
 	// BufferSize 缓冲区大小
 	BufferSize int
+	// Debug 是否启用调试输出
+	Debug bool
 }
 
 // DefaultReaderConfig 默认读取器配置
@@ -22,6 +24,7 @@ func DefaultReaderConfig() *ReaderConfig {
 		MaxMemoryUsage:        100 * 1024 * 1024, // 100MB
 		EnableBuffering:       true,
 		BufferSize:            64 * 1024, // 64KB
+		Debug:                 false,     // 默认关闭调试输出
 	}
 }
 
@@ -44,6 +47,13 @@ func WithBuffering(enabled bool, size int) ReaderOption {
 	return func(config *ReaderConfig) {
 		config.EnableBuffering = enabled
 		config.BufferSize = size
+	}
+}
+
+// WithDebug 设置调试模式
+func WithDebug(debug bool) ReaderOption {
+	return func(config *ReaderConfig) {
+		config.Debug = debug
 	}
 }
 

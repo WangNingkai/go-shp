@@ -9,9 +9,22 @@ import (
 
 // ConvertShapefileToGeoJSON 将 Shapefile 转换为 GeoJSON 文件.
 func ConvertShapefileToGeoJSON(shapefilePath, geojsonPath string) error {
+	return ConvertShapefileToGeoJSONWithOptions(shapefilePath, geojsonPath, false)
+}
+
+// ConvertShapefileToGeoJSONWithOptions 将 Shapefile 转换为 GeoJSON 文件，支持选项.
+func ConvertShapefileToGeoJSONWithOptions(shapefilePath, geojsonPath string, ignoreCorrupted bool) error {
 	converter := GeoJSONConverter{}
 
-	geoJSON, err := converter.ShapefileToGeoJSON(shapefilePath)
+	var geoJSON *GeoJSON
+	var err error
+
+	if ignoreCorrupted {
+		geoJSON, err = converter.ShapefileToGeoJSONWithOptions(shapefilePath, WithIgnoreCorruptedShapes(true))
+	} else {
+		geoJSON, err = converter.ShapefileToGeoJSON(shapefilePath)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to convert shapefile to GeoJSON: %v", err)
 	}
@@ -82,7 +95,10 @@ func ShapeToGeoJSONString(shape Shape) (string, error) {
 	return string(data), nil
 }
 
-// BatchConvertShapefilesToGeoJSON 批量转换 Shapefile 到 GeoJSON.
+// ConvertShapefileToGeoJSONSkipCorrupted 将 Shapefile 转换为 GeoJSON 文件，跳过损坏的shape.
+func ConvertShapefileToGeoJSONSkipCorrupted(shapefilePath, geojsonPath string) error {
+	return ConvertShapefileToGeoJSONWithOptions(shapefilePath, geojsonPath, true)
+}
 func BatchConvertShapefilesToGeoJSON(inputDir, outputDir string) error {
 	// 查找所有 .shp 文件
 	shapefiles, err := filepath.Glob(filepath.Join(inputDir, "*.shp"))

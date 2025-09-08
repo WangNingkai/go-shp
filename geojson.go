@@ -296,6 +296,59 @@ func (c GeoJSONConverter) ShapefileToGeoJSON(filename string) (*GeoJSON, error) 
 	}, nil
 }
 
+// ShapefileToGeoJSONWithOptions converts an entire shapefile to a GeoJSON FeatureCollection with options
+func (c GeoJSONConverter) ShapefileToGeoJSONWithOptions(filename string, opts ...ReaderOption) (*GeoJSON, error) {
+	reader, err := OpenWithConfig(filename, DefaultReaderConfig(), opts...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = reader.Close() }()
+
+	var features []*Feature
+	fields := reader.Fields()
+
+	for reader.Next() {
+		n, shape := reader.Shape()
+
+		// Get attributes
+		properties := make(map[string]interface{}, len(fields))
+		for i, field := range fields {
+			attr := reader.ReadAttribute(n, i)
+			if attr == "" {
+				properties[field.String()] = nil
+				continue
+			}
+			if iVal, err := strconv.ParseInt(attr, 10, 64); err == nil {
+				properties[field.String()] = iVal
+			} else if fVal, err := strconv.ParseFloat(attr, 64); err == nil {
+				properties[field.String()] = fVal
+			} else if attr == "true" || attr == "false" {
+				properties[field.String()] = (attr == "true")
+			} else {
+				properties[field.String()] = attr
+			}
+		}
+
+		feature, err := c.FeatureToGeoJSON(shape, properties)
+		if err != nil {
+			continue // Skip invalid geometries
+		}
+
+		features = append(features, feature)
+	}
+
+	// 注意：这里我们不检查reader.Err()，因为在容错模式下可能会有一些可恢复的错误
+	// 只要我们成功读取了一些features，就返回结果
+	if err := reader.Err(); err != nil && len(features) == 0 {
+		return nil, err
+	}
+
+	return &GeoJSON{
+		Type:     "FeatureCollection",
+		Features: features,
+	}, nil
+}
+
 // GeoJSONToShapefile converts a GeoJSON FeatureCollection to a shapefile
 func (c GeoJSONConverter) GeoJSONToShapefile(geoJSON *GeoJSON, filename string) error {
 	if geoJSON.Type != "FeatureCollection" || len(geoJSON.Features) == 0 {

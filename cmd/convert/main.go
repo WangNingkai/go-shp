@@ -14,12 +14,13 @@ import (
 
 func main() {
 	var (
-		input     = flag.String("input", "", "输入文件路径 (.shp 或 .geojson)")
-		output    = flag.String("output", "", "输出文件路径")
-		batch     = flag.Bool("batch", false, "批量转换模式")
-		inputDir  = flag.String("input-dir", "", "批量转换输入目录")
-		outputDir = flag.String("output-dir", "", "批量转换输出目录")
-		help      = flag.Bool("help", false, "显示帮助信息")
+		input        = flag.String("input", "", "输入文件路径 (.shp 或 .geojson)")
+		output       = flag.String("output", "", "输出文件路径")
+		batch        = flag.Bool("batch", false, "批量转换模式")
+		inputDir     = flag.String("input-dir", "", "批量转换输入目录")
+		outputDir    = flag.String("output-dir", "", "批量转换输出目录")
+		skipCorrupted = flag.Bool("skip-corrupted", false, "跳过损坏的shape继续转换")
+		help         = flag.Bool("help", false, "显示帮助信息")
 	)
 
 	flag.Parse()
@@ -30,7 +31,7 @@ func main() {
 	}
 
 	if *batch {
-		handleBatchConversion(*inputDir, *outputDir)
+		handleBatchConversion(*inputDir, *outputDir, *skipCorrupted)
 		return
 	}
 
@@ -40,7 +41,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	handleSingleConversion(*input, *output)
+	handleSingleConversion(*input, *output, *skipCorrupted)
 }
 
 func printHelp() {
@@ -65,11 +66,13 @@ func printHelp() {
 	fmt.Println("        批量转换输入目录")
 	fmt.Println("  -output-dir string")
 	fmt.Println("        批量转换输出目录")
+	fmt.Println("  -skip-corrupted")
+	fmt.Println("        跳过损坏的shape继续转换")
 	fmt.Println("  -help")
 	fmt.Println("        显示此帮助信息")
 }
 
-func handleSingleConversion(input, output string) {
+func handleSingleConversion(input, output string, skipCorrupted bool) {
 	ext := strings.ToLower(filepath.Ext(input))
 
 	if output == "" {
@@ -90,7 +93,7 @@ func handleSingleConversion(input, output string) {
 	var err error
 	switch ext {
 	case ".shp":
-		err = shp.ConvertShapefileToGeoJSON(input, output)
+		err = shp.ConvertShapefileToGeoJSONWithOptions(input, output, skipCorrupted)
 	case ".geojson":
 		err = shp.ConvertGeoJSONToShapefile(input, output)
 	default:
@@ -104,7 +107,7 @@ func handleSingleConversion(input, output string) {
 	fmt.Printf("转换成功：%s\n", output)
 }
 
-func handleBatchConversion(inputDir, outputDir string) {
+func handleBatchConversion(inputDir, outputDir string, skipCorrupted bool) {
 	if inputDir == "" || outputDir == "" {
 		fmt.Println("错误：批量转换需要指定输入和输出目录")
 		printHelp()

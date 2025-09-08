@@ -9,6 +9,7 @@
 - 🗜️ 支持 ZIP 压缩文件直接读取
 - 🔄 大文件流式读取
 - 🌐 Shapefile ↔ GeoJSON 双向转换
+- 🛡️ 容错模式：跳过损坏的shape继续处理
 
 ## 安装
 
@@ -108,8 +109,21 @@ go install github.com/wangningkai/go-shp/cmd/convert@latest
 convert -input=file.shp -output=file.geojson
 convert -input=file.geojson -output=file.shp
 
-# 批量转换  
-convert -batch -input-dir=./shapefiles -output-dir=./geojson
+# 容错模式：跳过损坏的shape
+convert -input=file.shp -output=file.geojson -skip-corrupted
+```
+
+## 容错模式
+
+对于部分损坏的Shapefile，可以使用容错模式跳过问题shape：
+
+```go
+// 使用容错转换
+err := shp.ConvertShapefileToGeoJSONSkipCorrupted("input.shp", "output.geojson")
+
+// 或者使用配置选项
+reader, err := shp.OpenWithConfig("input.shp", shp.DefaultReaderConfig(), 
+    shp.WithIgnoreCorruptedShapes(true))
 ```
 
 ## 许可证

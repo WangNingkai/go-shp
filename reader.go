@@ -179,6 +179,10 @@ func (r *Reader) Next() bool {
 		if err == io.EOF {
 			return false // 正常结束，不设置错误
 		}
+		if r.config.IgnoreCorruptedShapes {
+			fmt.Printf("Warning: Error reading shape header, skipping: %v\n", err)
+			return r.trySkipToNextValidShape(cur)
+		}
 		r.err = fmt.Errorf("Error when reading metadata of next shape: %v", err)
 		return false
 	}
@@ -188,6 +192,10 @@ func (r *Reader) Next() bool {
 
 	// 检查记录大小是否合理
 	if size < 0 {
+		if r.config.IgnoreCorruptedShapes {
+			fmt.Printf("Warning: Invalid negative shape record size: %d at position %d, skipping\n", size, cur)
+			return r.trySkipToNextValidShape(cur)
+		}
 		r.err = fmt.Errorf("Invalid negative shape record size: %d at position %d", size, cur)
 		return false
 	}
@@ -195,6 +203,10 @@ func (r *Reader) Next() bool {
 	// 检查是否有足够的数据可读
 	expectedEndPos := cur + int64(size)*2 + 8
 	if expectedEndPos > r.filelength {
+		if r.config.IgnoreCorruptedShapes {
+			fmt.Printf("Warning: Shape record extends beyond file: expected end %d, file length %d, skipping\n", expectedEndPos, r.filelength)
+			return r.trySkipToNextValidShape(cur)
+		}
 		r.err = fmt.Errorf("Shape record extends beyond file: expected end %d, file length %d", expectedEndPos, r.filelength)
 		return false
 	}
@@ -202,6 +214,18 @@ func (r *Reader) Next() bool {
 	r.num = num
 	r.shape, err = newShape(shapetype)
 	if err != nil {
+		if r.config.IgnoreCorruptedShapes {
+			fmt.Printf("Warning: Error decoding shape type: %v, skipping\n", err)
+			// Try to skip to next shape based on size
+			nextPos := cur + int64(size)*2 + 8
+			if nextPos <= r.filelength {
+				_, seekErr := r.shp.Seek(nextPos, 0)
+				if seekErr == nil {
+					return r.Next() // Recursively try next shape
+				}
+			}
+			return false
+		}
 		r.err = fmt.Errorf("Error decoding shape type: %v", err)
 		return false
 	}
@@ -213,6 +237,22 @@ func (r *Reader) Next() bool {
 	er := &errReader{Reader: r.shp}
 	r.shape.read(er)
 	if er.e != nil {
+		if r.config.IgnoreCorruptedShapes {
+			if er.e == io.EOF {
+				fmt.Printf("Warning: Unexpected end of file while reading shape %d at position %d, skipping\n", num, beforeRead)
+			} else {
+				fmt.Printf("Warning: Error while reading shape %d: %v, skipping\n", num, er.e)
+			}
+			// Try to skip to next shape based on size
+			nextPos := cur + int64(size)*2 + 8
+			if nextPos <= r.filelength {
+				_, seekErr := r.shp.Seek(nextPos, 0)
+				if seekErr == nil {
+					return r.Next() // Recursively try next shape
+				}
+			}
+			return false
+		}
 		if er.e == io.EOF {
 			r.err = fmt.Errorf("Unexpected end of file while reading shape %d at position %d", num, beforeRead)
 		} else {
@@ -233,11 +273,52 @@ func (r *Reader) Next() bool {
 	nextPos := cur + int64(size)*2 + 8
 	_, err = r.shp.Seek(nextPos, 0)
 	if err != nil {
+		if r.config.IgnoreCorruptedShapes {
+			fmt.Printf("Warning: Error seeking to next position %d: %v, skipping\n", nextPos, err)
+			return false
+		}
 		r.err = fmt.Errorf("Error seeking to next position %d: %v", nextPos, err)
 		return false
 	}
 
 	return true
+}
+
+// trySkipToNextValidShape 尝试跳过损坏的shape，寻找下一个有效的shape
+func (r *Reader) trySkipToNextValidShape(currentPos int64) bool {
+	fmt.Printf("Attempting to skip corrupted shape and find next valid shape...\n")
+	
+	// 从当前位置开始，以小步长前进寻找下一个有效的shape头
+	for pos := currentPos + 8; pos < r.filelength-8; pos += 4 {
+		_, err := r.shp.Seek(pos, 0)
+		if err != nil {
+			continue
+		}
+		
+		// 尝试读取shape记录头
+		_, size, shapetype, err := readShapeRecordHeader(r.shp)
+		if err != nil {
+			continue
+		}
+		
+		// 检查这是否看起来像一个有效的shape记录
+		if size >= 0 && size < 100000 && // 合理的大小范围
+			(shapetype >= NULL && shapetype <= MULTIPATCH) { // 有效的shape类型
+			
+			expectedEndPos := pos + int64(size)*2 + 8
+			if expectedEndPos <= r.filelength {
+				fmt.Printf("Found potential valid shape at position %d\n", pos)
+				// 重新定位到这个位置，让下一次Next()调用处理它
+				_, err = r.shp.Seek(pos, 0)
+				if err == nil {
+					return r.Next() // 递归调用Next尝试读取这个shape
+				}
+			}
+		}
+	}
+	
+	fmt.Printf("No more valid shapes found\n")
+	return false
 }
 
 // func (r *Reader) Next() bool {

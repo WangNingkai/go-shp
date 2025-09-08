@@ -287,24 +287,24 @@ func (r *Reader) Next() bool {
 // trySkipToNextValidShape 尝试跳过损坏的shape，寻找下一个有效的shape
 func (r *Reader) trySkipToNextValidShape(currentPos int64) bool {
 	fmt.Printf("Attempting to skip corrupted shape and find next valid shape...\n")
-	
+
 	// 从当前位置开始，以小步长前进寻找下一个有效的shape头
 	for pos := currentPos + 8; pos < r.filelength-8; pos += 4 {
 		_, err := r.shp.Seek(pos, 0)
 		if err != nil {
 			continue
 		}
-		
+
 		// 尝试读取shape记录头
 		_, size, shapetype, err := readShapeRecordHeader(r.shp)
 		if err != nil {
 			continue
 		}
-		
+
 		// 检查这是否看起来像一个有效的shape记录
 		if size >= 0 && size < 100000 && // 合理的大小范围
 			(shapetype >= NULL && shapetype <= MULTIPATCH) { // 有效的shape类型
-			
+
 			expectedEndPos := pos + int64(size)*2 + 8
 			if expectedEndPos <= r.filelength {
 				fmt.Printf("Found potential valid shape at position %d\n", pos)
@@ -316,7 +316,7 @@ func (r *Reader) trySkipToNextValidShape(currentPos int64) bool {
 			}
 		}
 	}
-	
+
 	fmt.Printf("No more valid shapes found\n")
 	return false
 }

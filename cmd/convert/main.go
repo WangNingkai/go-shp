@@ -14,13 +14,13 @@ import (
 
 func main() {
 	var (
-		input        = flag.String("input", "", "输入文件路径 (.shp 或 .geojson)")
-		output       = flag.String("output", "", "输出文件路径")
-		batch        = flag.Bool("batch", false, "批量转换模式")
-		inputDir     = flag.String("input-dir", "", "批量转换输入目录")
-		outputDir    = flag.String("output-dir", "", "批量转换输出目录")
+		input         = flag.String("input", "", "输入文件路径 (.shp 或 .geojson)")
+		output        = flag.String("output", "", "输出文件路径")
+		batch         = flag.Bool("batch", false, "批量转换模式")
+		inputDir      = flag.String("input-dir", "", "批量转换输入目录")
+		outputDir     = flag.String("output-dir", "", "批量转换输出目录")
 		skipCorrupted = flag.Bool("skip-corrupted", false, "跳过损坏的shape继续转换")
-		help         = flag.Bool("help", false, "显示帮助信息")
+		help          = flag.Bool("help", false, "显示帮助信息")
 	)
 
 	flag.Parse()

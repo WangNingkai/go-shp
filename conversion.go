@@ -99,6 +99,7 @@ func ShapeToGeoJSONString(shape Shape) (string, error) {
 func ConvertShapefileToGeoJSONSkipCorrupted(shapefilePath, geojsonPath string) error {
 	return ConvertShapefileToGeoJSONWithOptions(shapefilePath, geojsonPath, true)
 }
+
 func BatchConvertShapefilesToGeoJSON(inputDir, outputDir string) error {
 	// 查找所有 .shp 文件
 	shapefiles, err := filepath.Glob(filepath.Join(inputDir, "*.shp"))

@@ -7,6 +7,11 @@ import (
 	"strconv"
 )
 
+const (
+	boolTrue  = "true"
+	boolFalse = "false"
+)
+
 // GeoJSON represents a complete GeoJSON object
 type GeoJSON struct {
 	Type       string                 `json:"type"`
@@ -271,8 +276,8 @@ func (c GeoJSONConverter) ShapefileToGeoJSON(filename string) (*GeoJSON, error) 
 				properties[field.String()] = iVal
 			} else if fVal, err := strconv.ParseFloat(attr, 64); err == nil {
 				properties[field.String()] = fVal
-			} else if attr == "true" || attr == "false" {
-				properties[field.String()] = (attr == "true")
+			} else if attr == boolTrue || attr == boolFalse {
+				properties[field.String()] = (attr == boolTrue)
 			} else {
 				properties[field.String()] = attr
 			}
@@ -322,8 +327,8 @@ func (c GeoJSONConverter) ShapefileToGeoJSONWithOptions(filename string, opts ..
 				properties[field.String()] = iVal
 			} else if fVal, err := strconv.ParseFloat(attr, 64); err == nil {
 				properties[field.String()] = fVal
-			} else if attr == "true" || attr == "false" {
-				properties[field.String()] = (attr == "true")
+			} else if attr == boolTrue || attr == boolFalse {
+				properties[field.String()] = (attr == boolTrue)
 			} else {
 				properties[field.String()] = attr
 			}

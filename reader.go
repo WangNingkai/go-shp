@@ -168,6 +168,7 @@ func newShape(shapetype ShapeType) (Shape, error) {
 // returns false when the reader has reached the end of the
 // file or encounters an error.
 
+//nolint:gocyclo
 func (r *Reader) Next() bool {
 	r.shapeCount++
 	if r.config != nil && r.config.Debug {
@@ -309,6 +310,8 @@ func (r *Reader) Next() bool {
 }
 
 // trySkipToNextValidShape 尝试跳过损坏的shape，寻找下一个有效的shape
+//
+//nolint:gocyclo
 func (r *Reader) trySkipToNextValidShape(currentPos int64) bool {
 	if r.config != nil && r.config.Debug {
 		fmt.Printf("Attempting to skip corrupted shape and find next valid shape...\n")
@@ -330,7 +333,6 @@ func (r *Reader) trySkipToNextValidShape(currentPos int64) bool {
 		// 检查这是否看起来像一个有效的shape记录
 		if size >= 0 && size < 100000 && // 合理的大小范围
 			(shapetype >= NULL && shapetype <= MULTIPATCH) { // 有效的shape类型
-
 			expectedEndPos := pos + int64(size)*2 + 8
 			if expectedEndPos <= r.filelength {
 				if r.config != nil && r.config.Debug {

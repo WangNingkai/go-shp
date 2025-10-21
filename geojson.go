@@ -631,8 +631,15 @@ func (c GeoJSONConverter) toFloat64(val interface{}) (float64, error) {
 }
 
 // SaveGeoJSONToFile saves a GeoJSON object to a file
-func (c GeoJSONConverter) SaveGeoJSONToFile(geoJSON *GeoJSON, filename string) error {
-	data, err := json.MarshalIndent(geoJSON, "", "  ")
+func (c GeoJSONConverter) SaveGeoJSONToFile(geoJSON *GeoJSON, filename string, compact ...bool) error {
+	isCompact := len(compact) > 0 && compact[0]
+	var data []byte
+	var err error
+	if isCompact {
+		data, err = json.Marshal(geoJSON)
+	} else {
+		data, err = json.MarshalIndent(geoJSON, "", "  ")
+	}
 	if err != nil {
 		return err
 	}

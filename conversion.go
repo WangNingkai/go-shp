@@ -13,7 +13,7 @@ func ConvertShapefileToGeoJSON(shapefilePath, geojsonPath string) error {
 }
 
 // ConvertShapefileToGeoJSONWithOptions 将 Shapefile 转换为 GeoJSON 文件，支持选项.
-func ConvertShapefileToGeoJSONWithOptions(shapefilePath, geojsonPath string, ignoreCorrupted bool) error {
+func ConvertShapefileToGeoJSONWithOptions(shapefilePath, geojsonPath string, ignoreCorrupted bool, compact ...bool) error {
 	converter := GeoJSONConverter{}
 
 	var geoJSON *GeoJSON
@@ -29,7 +29,9 @@ func ConvertShapefileToGeoJSONWithOptions(shapefilePath, geojsonPath string, ign
 		return fmt.Errorf("failed to convert shapefile to GeoJSON: %v", err)
 	}
 
-	err = converter.SaveGeoJSONToFile(geoJSON, geojsonPath)
+	// Compact flag: optional variadic boolean; if provided and true, write compact JSON
+	isCompact := len(compact) > 0 && compact[0]
+	err = converter.SaveGeoJSONToFile(geoJSON, geojsonPath, isCompact)
 	if err != nil {
 		return fmt.Errorf("failed to save GeoJSON file: %v", err)
 	}

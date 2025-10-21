@@ -20,6 +20,7 @@ func main() {
 		inputDir      = flag.String("input-dir", "", "批量转换输入目录")
 		outputDir     = flag.String("output-dir", "", "批量转换输出目录")
 		skipCorrupted = flag.Bool("skip-corrupted", false, "跳过损坏的shape继续转换")
+		compact       = flag.Bool("compact", false, "输出紧凑的 GeoJSON（无缩进）")
 		help          = flag.Bool("help", false, "显示帮助信息")
 	)
 
@@ -41,7 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	handleSingleConversion(*input, *output, *skipCorrupted)
+	handleSingleConversion(*input, *output, *skipCorrupted, *compact)
 }
 
 func printHelp() {
@@ -68,11 +69,13 @@ func printHelp() {
 	fmt.Println("        批量转换输出目录")
 	fmt.Println("  -skip-corrupted")
 	fmt.Println("        跳过损坏的shape继续转换")
+	fmt.Println("  -compact")
+	fmt.Println("        输出紧凑的 GeoJSON（无缩进）")
 	fmt.Println("  -help")
 	fmt.Println("        显示此帮助信息")
 }
 
-func handleSingleConversion(input, output string, skipCorrupted bool) {
+func handleSingleConversion(input, output string, skipCorrupted, compact bool) {
 	ext := strings.ToLower(filepath.Ext(input))
 
 	if output == "" {
@@ -93,7 +96,7 @@ func handleSingleConversion(input, output string, skipCorrupted bool) {
 	var err error
 	switch ext {
 	case ".shp":
-		err = shp.ConvertShapefileToGeoJSONWithOptions(input, output, skipCorrupted)
+		err = shp.ConvertShapefileToGeoJSONWithOptions(input, output, skipCorrupted, compact)
 	case ".geojson":
 		err = shp.ConvertGeoJSONToShapefile(input, output)
 	default:

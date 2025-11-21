@@ -1,6 +1,8 @@
 # go-shp
 
-一个用于读写 ESRI Shapefile 格式的 Go 语言库，支持所有标准几何类型及 GeoJSON 转换。
+[English](README_EN.md) | 简体中文
+
+一个用于读写 ESRI Shapefile 格式的 Go 语言库,支持所有标准几何类型及 GeoJSON 转换。
 
 ## 特性
 

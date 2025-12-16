@@ -3,6 +3,7 @@ package shp
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 )
@@ -258,7 +259,12 @@ func (c GeoJSONConverter) ShapefileToGeoJSON(filename string) (*GeoJSON, error) 
 	}
 	defer func() { _ = reader.Close() }()
 
-	var features []*Feature
+	// 预分配 features 容量，减少扩容与拷贝
+	capHint := reader.AttributeCount()
+	if capHint < 0 {
+		capHint = 0
+	}
+	features := make([]*Feature, 0, capHint)
 	fields := reader.Fields()
 
 	for reader.Next() {
@@ -309,7 +315,11 @@ func (c GeoJSONConverter) ShapefileToGeoJSONWithOptions(filename string, opts ..
 	}
 	defer func() { _ = reader.Close() }()
 
-	var features []*Feature
+	capHint := reader.AttributeCount()
+	if capHint < 0 {
+		capHint = 0
+	}
+	features := make([]*Feature, 0, capHint)
 	fields := reader.Fields()
 
 	for reader.Next() {
@@ -633,23 +643,22 @@ func (c GeoJSONConverter) toFloat64(val interface{}) (float64, error) {
 // SaveGeoJSONToFile saves a GeoJSON object to a file
 func (c GeoJSONConverter) SaveGeoJSONToFile(geoJSON *GeoJSON, filename string, compact ...bool) error {
 	isCompact := len(compact) > 0 && compact[0]
-	var data []byte
-	var err error
-	if isCompact {
-		data, err = json.Marshal(geoJSON)
-	} else {
-		data, err = json.MarshalIndent(geoJSON, "", "  ")
-	}
+	file, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
+	defer func() { _ = file.Close() }()
 
-	return writeFile(filename, data)
+	enc := json.NewEncoder(file)
+	if !isCompact {
+		enc.SetIndent("", "  ")
+	}
+	return enc.Encode(geoJSON)
 }
 
 // LoadGeoJSONFromFile loads a GeoJSON object from a file
 func (c GeoJSONConverter) LoadGeoJSONFromFile(filename string) (*GeoJSON, error) {
-	data, err := readFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -664,40 +673,77 @@ func (c GeoJSONConverter) LoadGeoJSONFromFile(filename string) (*GeoJSON, error)
 }
 
 // Helper functions for file I/O (these would typically be in a separate file)
-func writeFile(filename string, data []byte) error {
-	// This is a placeholder - you would implement actual file writing
-	// For now, using os package
+func writeFile(filename string, r io.Reader) error {
 	file, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = file.Close() }()
-
-	_, err = file.Write(data)
+	_, err = io.Copy(file, r)
 	return err
 }
 
-func readFile(filename string) ([]byte, error) {
-	// This is a placeholder - you would implement actual file reading
-	// For now, using os package
-	file, err := os.Open(filename)
+// ShapefileToGeoJSONStream 将 Shapefile 以流式方式写出为 GeoJSON（紧凑格式）。
+// 适合超大文件，避免一次性构建全部 features 切片占用内存。
+// 可通过 ReaderOption（如 WithIgnoreCorruptedShapes(true)）控制读取行为。
+func (c GeoJSONConverter) ShapefileToGeoJSONStream(shpPath string, w io.Writer, opts ...ReaderOption) error {
+	reader, err := OpenWithConfig(shpPath, DefaultReaderConfig(), opts...)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer func() { _ = file.Close() }()
+	defer func() { _ = reader.Close() }()
 
-	var data []byte
-	buf := make([]byte, 1024)
-	for {
-		n, err := file.Read(buf)
-		if err != nil {
-			if err.Error() == "EOF" {
-				break
+	fields := reader.Fields()
+
+	// 写入 FeatureCollection 头
+	if _, err := w.Write([]byte(`{"type":"FeatureCollection","features":[`)); err != nil {
+		return err
+	}
+
+	first := true
+	enc := json.NewEncoder(w)
+
+	for reader.Next() {
+		n, shape := reader.Shape()
+		props := make(map[string]interface{}, len(fields))
+		for i, field := range fields {
+			attr := reader.ReadAttribute(n, i)
+			if attr == "" {
+				props[field.String()] = nil
+				continue
 			}
-			return nil, err
+			if iVal, err := strconv.ParseInt(attr, 10, 64); err == nil {
+				props[field.String()] = iVal
+			} else if fVal, err := strconv.ParseFloat(attr, 64); err == nil {
+				props[field.String()] = fVal
+			} else if attr == boolTrue || attr == boolFalse {
+				props[field.String()] = (attr == boolTrue)
+			} else {
+				props[field.String()] = attr
+			}
 		}
-		data = append(data, buf[:n]...)
+
+		feature, err := c.FeatureToGeoJSON(shape, props)
+		if err != nil {
+			continue
+		}
+
+		if !first {
+			if _, err := w.Write([]byte(",")); err != nil {
+				return err
+			}
+		}
+		first = false
+		if err := enc.Encode(feature); err != nil {
+			return err
+		}
 	}
 
-	return data, nil
+	if err := reader.Err(); err != nil {
+		return err
+	}
+
+	// 结尾
+	_, err = w.Write([]byte("]}"))
+	return err
 }

@@ -14,7 +14,7 @@
 - 🛡️ 容错模式：跳过损坏的shape继续处理
 
 ## 安装
-
+README_EN.md 同步英文文档说明。是否继续？
 ```bash
 go get github.com/wangningkai/go-shp
 ```
@@ -113,6 +113,36 @@ convert -input=file.geojson -output=file.shp
 
 # 容错模式：跳过损坏的shape
 convert -input=file.shp -output=file.geojson -skip-corrupted
+
+## 处理超大文件的最佳实践
+
+当 Shapefile 体积很大（数百万要素）时，优先使用“流式”方式导出 GeoJSON，可显著降低内存占用并提升稳定性：
+
+- 命令行使用：
+
+    ```bash
+    # 从 .shp 流式写出到 .geojson（始终紧凑输出，无缩进）
+    go run cmd/convert/main.go -input=big.shp -output=big.geojson -stream
+
+    # 遇到损坏的 shape 仍继续（忽略错误的记录）
+    go run cmd/convert/main.go -input=big.shp -output=big.geojson -stream -skip-corrupted
+    ```
+
+- 编程接口：
+
+    ```go
+    f, _ := os.Create("big.geojson")
+    defer f.Close()
+    conv := shp.GeoJSONConverter{}
+    // 可选忽略损坏记录：shp.WithIgnoreCorruptedShapes(true)
+    _ = conv.ShapefileToGeoJSONStream("big.shp", f, shp.WithIgnoreCorruptedShapes(true))
+    ```
+
+说明与注意事项：
+
+- 流式写出边读边写，不构建完整 `features` 列表，内存使用随记录大小缓慢增长而非峰值暴涨。
+- 流式模式下输出为紧凑 JSON（无缩进），若需要可读性输出，请使用非流式模式并移除 `-stream`，改用 `-compact=false`（默认即可）。
+- `-skip-corrupted` 可与 `-stream` 同时使用，用于在存在损坏记录时尽可能完成其余数据的导出。
 ```
 
 ## 容错模式

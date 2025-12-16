@@ -3,7 +3,6 @@ package shp
 import (
 	"fmt"
 	"io"
-	"strings"
 )
 
 // SequentialReader is the interface that allows reading shapes and attributes one after another. It also embeds io.Closer.
@@ -233,8 +232,18 @@ func (sr *seqReader) Attribute(n int) string {
 		return ""
 	}
 	start := dbfFieldStartByte(sr.dbfFields, n)
-	s := string(sr.dbfRow[start : start+int(sr.dbfFields[n].Size)])
-	return strings.Trim(s, " ")
+	end := start + int(sr.dbfFields[n].Size)
+	// trim ASCII spaces on both ends without intermediate string
+	b := sr.dbfRow[start:end]
+	i := 0
+	for i < len(b) && b[i] == ' ' {
+		i++
+	}
+	j := len(b)
+	for j > i && b[j-1] == ' ' {
+		j--
+	}
+	return string(b[i:j])
 }
 
 // Err returns the first non-EOF error that was encountered.

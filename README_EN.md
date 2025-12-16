@@ -115,6 +115,36 @@ convert -input=file.geojson -output=file.shp
 convert -input=file.shp -output=file.geojson -skip-corrupted
 ```
 
+## Best Practices for Huge Files
+
+When Shapefiles are very large (millions of features), prefer the streaming export to GeoJSON to significantly reduce memory usage and improve stability:
+
+- Command line:
+
+    ```bash
+    # Stream from .shp to .geojson (always compact output, no indentation)
+    go run cmd/convert/main.go -input=big.shp -output=big.geojson -stream
+
+    # Continue on corrupted shapes (skip invalid records)
+    go run cmd/convert/main.go -input=big.shp -output=big.geojson -stream -skip-corrupted
+    ```
+
+- Programming API:
+
+    ```go
+    f, _ := os.Create("big.geojson")
+    defer f.Close()
+    conv := shp.GeoJSONConverter{}
+    // Optionally ignore corrupted records: shp.WithIgnoreCorruptedShapes(true)
+    _ = conv.ShapefileToGeoJSONStream("big.shp", f, shp.WithIgnoreCorruptedShapes(true))
+    ```
+
+Notes and caveats:
+
+- Streaming writes features as they are read without building a full `features` array; memory grows slowly with record size instead of spiking.
+- In streaming mode, output is compact JSON (no indentation). For human-readable output, use non-streaming mode and set `-compact=false` (default).
+- `-skip-corrupted` can be combined with `-stream` to export the remaining valid data when some records are corrupted.
+
 ## Fault-Tolerant Mode
 
 For partially corrupted Shapefiles, you can use fault-tolerant mode to skip problematic shapes:

@@ -32,6 +32,9 @@ type Reader struct {
 
 	// Configuration
 	config *ReaderConfig
+
+	// internal reusable buffer for attribute reads to reduce allocations
+	attrBuf []byte
 }
 
 type readSeekCloser interface {
@@ -441,7 +444,28 @@ func (r *Reader) ReadAttribute(row int, field int) string {
 	_ = r.openDbf() // make sure we have a dbf file to read from
 	seekTo := dbfFieldOffset(r.dbfHeaderLength, r.dbfRecordLength, row, r.dbfFields, field)
 	_, _ = r.dbf.Seek(seekTo, io.SeekStart)
-	buf := make([]byte, r.dbfFields[field].Size)
+	size := int(r.dbfFields[field].Size)
+	if cap(r.attrBuf) < size {
+		r.attrBuf = make([]byte, size)
+	}
+	buf := r.attrBuf[:size]
 	_, _ = r.dbf.Read(buf)
-	return strings.Trim(string(buf), " ")
+	// trim spaces without creating an intermediate string
+	trimmed := bytesTrimSpaceRight(buf)
+	return string(trimmed)
+}
+
+// bytesTrimSpaceRight trims ASCII spaces on both ends, optimized for DBF which uses space padding.
+func bytesTrimSpaceRight(b []byte) []byte {
+	// trim left
+	i := 0
+	for i < len(b) && b[i] == ' ' {
+		i++
+	}
+	// trim right
+	j := len(b)
+	for j > i && b[j-1] == ' ' {
+		j--
+	}
+	return b[i:j]
 }

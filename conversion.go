@@ -3,6 +3,7 @@ package shp
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -37,6 +38,20 @@ func ConvertShapefileToGeoJSONWithOptions(shapefilePath, geojsonPath string, ign
 	}
 
 	return nil
+}
+
+// ConvertShapefileToGeoJSONStream 以流式方式将 Shapefile 转为 GeoJSON（紧凑格式），更节省内存。
+func ConvertShapefileToGeoJSONStream(shapefilePath, geojsonPath string, skipCorrupted bool) error {
+	converter := GeoJSONConverter{}
+	f, err := os.Create(geojsonPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	if skipCorrupted {
+		return converter.ShapefileToGeoJSONStream(shapefilePath, f, WithIgnoreCorruptedShapes(true))
+	}
+	return converter.ShapefileToGeoJSONStream(shapefilePath, f)
 }
 
 // ConvertShapefileToGeoJSONString 将 Shapefile 转换为 GeoJSON 字符串.

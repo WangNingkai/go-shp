@@ -1,7 +1,9 @@
 package shp
 
 import (
+	"encoding/binary"
 	"io"
+	"math"
 	"strings"
 )
 
@@ -89,10 +91,9 @@ func readBasicPolygonShape(file io.Reader, box *Box, numParts *int32, numPoints 
 	readLE(er, box)
 	readLE(er, numParts)
 	readLE(er, numPoints)
-	*parts = make([]int32, *numParts)
-	*points = make([]Point, *numPoints)
-	readLE(er, parts)
-	readLE(er, points)
+
+	readInt32sOptimized(er, parts, *numParts)
+	readPointsOptimized(er, points, *numPoints)
 }
 
 // writeBasicPolygonShape writes common polygon-like shape data
@@ -117,14 +118,12 @@ func readPolygonShapeWithZ(file io.Reader, box *Box, numParts *int32, numPoints 
 	readLE(er, box)
 	readLE(er, numParts)
 	readLE(er, numPoints)
-	*parts = make([]int32, *numParts)
-	*points = make([]Point, *numPoints)
-	*zArray = make([]float64, *numPoints)
-	*mArray = make([]float64, *numPoints)
-	readLE(er, parts)
-	readLE(er, points)
+
+	readInt32sOptimized(er, parts, *numParts)
+	readPointsOptimized(er, points, *numPoints)
+
 	readLE(er, zRange)
-	readLE(er, zArray)
+	readFloatsOptimized(er, zArray, *numPoints)
 
 	// Try to read M data, but don't fail if it's incomplete (common at file end)
 	beforeMRange := er.e
@@ -134,6 +133,7 @@ func readPolygonShapeWithZ(file io.Reader, box *Box, numParts *int32, numPoints 
 		er.e = nil
 		*mRange = [2]float64{0, 0}
 		// Fill M array with zeros
+		*mArray = make([]float64, *numPoints) // ensure allocated
 		for i := range *mArray {
 			(*mArray)[i] = 0
 		}
@@ -141,7 +141,7 @@ func readPolygonShapeWithZ(file io.Reader, box *Box, numParts *int32, numPoints 
 	}
 
 	beforeMArray := er.e
-	readLE(er, mArray)
+	readFloatsOptimized(er, mArray, *numPoints)
 	if er.e != nil && beforeMArray == nil {
 		// M Array failed to read, probably at file end - reset error and use default values
 		er.e = nil
@@ -177,13 +177,12 @@ func readPolygonShapeWithM(file io.Reader, box *Box, numParts *int32, numPoints 
 	readLE(er, box)
 	readLE(er, numParts)
 	readLE(er, numPoints)
-	*parts = make([]int32, *numParts)
-	*points = make([]Point, *numPoints)
-	*mArray = make([]float64, *numPoints)
-	readLE(er, parts)
-	readLE(er, points)
+
+	readInt32sOptimized(er, parts, *numParts)
+	readPointsOptimized(er, points, *numPoints)
+
 	readLE(er, mRange)
-	readLE(er, mArray)
+	readFloatsOptimized(er, mArray, *numPoints)
 }
 
 // writePolygonShapeWithM writes polygon-like shapes with only M arrays
@@ -209,8 +208,7 @@ func readMultiPointBasic(file io.Reader, box *Box, numPoints *int32, points *[]P
 
 	readLE(er, box)
 	readLE(er, numPoints)
-	*points = make([]Point, *numPoints)
-	readLE(er, points)
+	readPointsOptimized(er, points, *numPoints)
 }
 
 func writeMultiPointBasic(file io.Writer, box Box, numPoints int32, points []Point) {
@@ -231,14 +229,11 @@ func readMultiPointWithZ(file io.Reader, box *Box, numPoints *int32, points *[]P
 
 	readLE(er, box)
 	readLE(er, numPoints)
-	*points = make([]Point, *numPoints)
-	*zArray = make([]float64, *numPoints)
-	*mArray = make([]float64, *numPoints)
-	readLE(er, points)
+	readPointsOptimized(er, points, *numPoints)
 	readLE(er, zRange)
-	readLE(er, zArray)
+	readFloatsOptimized(er, zArray, *numPoints)
 	readLE(er, mRange)
-	readLE(er, mArray)
+	readFloatsOptimized(er, mArray, *numPoints)
 }
 
 // writeMultiPointWithZ writes multipoint with Z and M arrays
@@ -264,11 +259,9 @@ func readMultiPointWithM(file io.Reader, box *Box, numPoints *int32, points *[]P
 
 	readLE(er, box)
 	readLE(er, numPoints)
-	*points = make([]Point, *numPoints)
-	*mArray = make([]float64, *numPoints)
-	readLE(er, points)
+	readPointsOptimized(er, points, *numPoints)
 	readLE(er, mRange)
-	readLE(er, mArray)
+	readFloatsOptimized(er, mArray, *numPoints)
 }
 
 // writeMultiPointWithM writes multipoint with only M arrays
@@ -656,18 +649,16 @@ func (p *MultiPatch) read(file io.Reader) {
 	readLE(er, &p.Box)
 	readLE(er, &p.NumParts)
 	readLE(er, &p.NumPoints)
-	p.Parts = make([]int32, p.NumParts)
-	p.PartTypes = make([]int32, p.NumParts)
-	p.Points = make([]Point, p.NumPoints)
-	p.ZArray = make([]float64, p.NumPoints)
-	p.MArray = make([]float64, p.NumPoints)
-	readLE(er, &p.Parts)
-	readLE(er, &p.PartTypes)
-	readLE(er, &p.Points)
+
+	readInt32sOptimized(er, &p.Parts, p.NumParts)
+	readInt32sOptimized(er, &p.PartTypes, p.NumParts)
+	readPointsOptimized(er, &p.Points, p.NumPoints)
+
 	readLE(er, &p.ZRange)
-	readLE(er, &p.ZArray)
+	readFloatsOptimized(er, &p.ZArray, p.NumPoints)
+
 	readLE(er, &p.MRange)
-	readLE(er, &p.MArray)
+	readFloatsOptimized(er, &p.MArray, p.NumPoints)
 }
 
 func (p *MultiPatch) write(file io.Writer) {
@@ -732,4 +723,54 @@ func DateField(name string) Field {
 	field := Field{Fieldtype: 'D', Size: 8}
 	copy(field.Name[:], []byte(name))
 	return field
+}
+
+// readPointsOptimized reads points directly from the reader to avoid reflection overhead in binary.Read
+func readPointsOptimized(er *errReader, points *[]Point, numPoints int32) {
+	if er.e != nil {
+		return
+	}
+	*points = make([]Point, numPoints)
+	buf := make([]byte, int(numPoints)*16)
+	if _, err := io.ReadFull(er, buf); err != nil {
+		er.e = err
+		return
+	}
+	for i := 0; i < int(numPoints); i++ {
+		offset := i * 16
+		(*points)[i].X = math.Float64frombits(binary.LittleEndian.Uint64(buf[offset : offset+8]))
+		(*points)[i].Y = math.Float64frombits(binary.LittleEndian.Uint64(buf[offset+8 : offset+16]))
+	}
+}
+
+// readFloatsOptimized reads float64 array directly from the reader
+func readFloatsOptimized(er *errReader, floats *[]float64, count int32) {
+	if er.e != nil {
+		return
+	}
+	*floats = make([]float64, count)
+	buf := make([]byte, int(count)*8)
+	if _, err := io.ReadFull(er, buf); err != nil {
+		er.e = err
+		return
+	}
+	for i := 0; i < int(count); i++ {
+		(*floats)[i] = math.Float64frombits(binary.LittleEndian.Uint64(buf[i*8 : i*8+8]))
+	}
+}
+
+// readInt32sOptimized reads int32 array directly from the reader
+func readInt32sOptimized(er *errReader, ints *[]int32, count int32) {
+	if er.e != nil {
+		return
+	}
+	*ints = make([]int32, count)
+	buf := make([]byte, int(count)*4)
+	if _, err := io.ReadFull(er, buf); err != nil {
+		er.e = err
+		return
+	}
+	for i := 0; i < int(count); i++ {
+		(*ints)[i] = int32(binary.LittleEndian.Uint32(buf[i*4 : i*4+4]))
+	}
 }

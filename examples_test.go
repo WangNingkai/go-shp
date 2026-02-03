@@ -143,14 +143,12 @@ func ExampleValidator() {
 	// Invalid point caught: shapefile error: bounding box contains NaN values
 }
 
-// ExampleGeometryUtils 演示几何工具函数的使用
-func ExampleGeometryUtils() {
-	utils := shp.GeometryUtils{}
-
+// Example_geometry 演示几何工具函数的使用
+func Example_geometry() {
 	// 计算两点距离
 	p1 := shp.Point{X: 0.0, Y: 0.0}
 	p2 := shp.Point{X: 3.0, Y: 4.0}
-	distance := utils.Distance(p1, p2)
+	distance := shp.Distance(p1, p2)
 	fmt.Printf("Distance: %.2f\n", distance)
 
 	// 计算多边形面积
@@ -161,16 +159,16 @@ func ExampleGeometryUtils() {
 		{X: 0.0, Y: 3.0},
 		{X: 0.0, Y: 0.0},
 	}
-	area := utils.Area(polygon)
+	area := shp.Area(polygon)
 	fmt.Printf("Area: %.2f\n", area)
 
 	// 计算质心
-	centroid := utils.Centroid(polygon)
+	centroid := shp.Centroid(polygon)
 	fmt.Printf("Centroid: (%.2f, %.2f)\n", centroid.X, centroid.Y)
 
 	// 点在多边形内测试
 	testPoint := shp.Point{X: 2.0, Y: 1.5}
-	inside := utils.IsPointInPolygon(testPoint, polygon)
+	inside := shp.IsPointInPolygon(testPoint, polygon)
 	fmt.Printf("Point inside polygon: %t\n", inside)
 
 	// Output:
@@ -180,12 +178,10 @@ func ExampleGeometryUtils() {
 	// Point inside polygon: true
 }
 
-// ExampleStatisticsUtils 演示统计工具的使用
-func ExampleStatisticsUtils() {
-	utils := shp.StatisticsUtils{}
-
+// ExampleAnalyzeShapefile 演示统计工具的使用
+func ExampleAnalyzeShapefile() {
 	// 分析Shapefile
-	stats, err := utils.AnalyzeShapefile("test_files/point.shp")
+	stats, err := shp.AnalyzeShapefile("test_files/point.shp")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -198,17 +194,15 @@ func ExampleStatisticsUtils() {
 	fmt.Println(stats.String())
 }
 
-// ExampleFormatUtils 演示格式转换工具的使用
-func ExampleFormatUtils() {
-	utils := shp.FormatUtils{}
-
+// Example_formatting 演示格式转换工具的使用
+func Example_formatting() {
 	// 点转GeoJSON
 	point := &shp.Point{X: -122.4194, Y: 37.7749}
-	geoJSON := utils.ToGeoJSON(point)
+	geoJSON := shp.ToGeoJSON(point)
 	fmt.Printf("GeoJSON: %s\n", geoJSON)
 
 	// 点转WKT
-	wkt := utils.ToWKT(point)
+	wkt := shp.ToWKT(point)
 	fmt.Printf("WKT: %s\n", wkt)
 
 	// 多线转换
@@ -220,7 +214,7 @@ func ExampleFormatUtils() {
 	}
 	polyline := shp.NewPolyLine(parts)
 
-	polylineGeoJSON := utils.ToGeoJSON(polyline)
+	polylineGeoJSON := shp.ToGeoJSON(polyline)
 	fmt.Printf("Polyline GeoJSON: %s\n", polylineGeoJSON)
 
 	// Output:

@@ -61,19 +61,27 @@ func OpenWithConfig(filename string, config *ReaderConfig, opts ...ReaderOption)
 			fmt.Sprintf("invalid file extension: %s", filename), nil)
 	}
 
-	shp, err := os.Open(filename)
+	shpFile, err := os.Open(filename)
 	if err != nil {
 		return nil, NewShapeError(ErrIO, "failed to open shapefile", err)
 	}
 
+	var shpReader readSeekCloser = shpFile
+	if config.EnableBuffering {
+		if config.BufferSize <= 0 {
+			config.BufferSize = 4096 // Default buffer size if invalid
+		}
+		shpReader = newBufferedReadSeeker(shpFile, config.BufferSize)
+	}
+
 	s := &Reader{
 		filename: strings.TrimSuffix(filename, ext),
-		shp:      shp,
+		shp:      shpReader,
 		config:   config,
 	}
 
 	if err := s.readHeaders(); err != nil {
-		_ = shp.Close()
+		_ = shpReader.Close()
 		return nil, err
 	}
 
@@ -94,11 +102,21 @@ func (r *Reader) readHeaders() error {
 	}
 
 	// 获取实际文件大小
-	stat, err := r.shp.(*os.File).Stat()
-	if err != nil {
-		return fmt.Errorf("failed to get file stats: %v", err)
+	var actualSize int64
+	if f, ok := r.shp.(*os.File); ok {
+		stat, err := f.Stat()
+		if err != nil {
+			return fmt.Errorf("failed to get file stats: %v", err)
+		}
+		actualSize = stat.Size()
+	} else {
+		// Fallback for buffered reader
+		stat, err := os.Stat(r.filename + ".shp")
+		if err != nil {
+			return fmt.Errorf("failed to get file stats: %v", err)
+		}
+		actualSize = stat.Size()
 	}
-	actualSize := stat.Size()
 
 	if r.config != nil && r.config.Debug {
 		fmt.Printf("Header reports file length: %d bytes, actual file size: %d bytes\n", fl, actualSize)

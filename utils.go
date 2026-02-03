@@ -7,18 +7,15 @@ import (
 	"strings"
 )
 
-// GeometryUtils 几何工具函数集合
-type GeometryUtils struct{}
-
 // Distance 计算两点之间的距离
-func (GeometryUtils) Distance(p1, p2 Point) float64 {
+func Distance(p1, p2 Point) float64 {
 	dx := p1.X - p2.X
 	dy := p1.Y - p2.Y
 	return math.Sqrt(dx*dx + dy*dy)
 }
 
 // Area 计算多边形面积 (使用鞋带公式)
-func (GeometryUtils) Area(points []Point) float64 {
+func Area(points []Point) float64 {
 	if len(points) < 3 {
 		return 0
 	}
@@ -36,7 +33,7 @@ func (GeometryUtils) Area(points []Point) float64 {
 }
 
 // Centroid 计算多边形质心
-func (GeometryUtils) Centroid(points []Point) Point {
+func Centroid(points []Point) Point {
 	if len(points) == 0 {
 		return Point{0, 0}
 	}
@@ -52,7 +49,7 @@ func (GeometryUtils) Centroid(points []Point) Point {
 }
 
 // IsPointInPolygon 判断点是否在多边形内 (射线法)
-func (GeometryUtils) IsPointInPolygon(point Point, polygon []Point) bool {
+func IsPointInPolygon(point Point, polygon []Point) bool {
 	if len(polygon) < 3 {
 		return false
 	}
@@ -73,7 +70,7 @@ func (GeometryUtils) IsPointInPolygon(point Point, polygon []Point) bool {
 }
 
 // SimplifyPolyLine 简化多线 (Douglas-Peucker算法)
-func (GeometryUtils) SimplifyPolyLine(points []Point, tolerance float64) []Point {
+func SimplifyPolyLine(points []Point, tolerance float64) []Point {
 	if len(points) <= 2 {
 		return points
 	}
@@ -136,9 +133,6 @@ func pointToLineDistance(point, lineStart, lineEnd Point) float64 {
 	return math.Abs(A*point.X+B*point.Y+C) / math.Sqrt(A*A+B*B)
 }
 
-// StatisticsUtils 统计工具函数集合
-type StatisticsUtils struct{}
-
 // ShapefileStats Shapefile统计信息
 type ShapefileStats struct {
 	TotalShapes    int
@@ -163,7 +157,7 @@ type AttributeStats struct {
 }
 
 // AnalyzeShapefile 分析Shapefile并返回统计信息
-func (StatisticsUtils) AnalyzeShapefile(filename string) (*ShapefileStats, error) {
+func AnalyzeShapefile(filename string) (*ShapefileStats, error) {
 	reader, err := Open(filename)
 	if err != nil {
 		return nil, err
@@ -179,7 +173,6 @@ func (StatisticsUtils) AnalyzeShapefile(filename string) (*ShapefileStats, error
 	s := statisticsCollector{
 		reader:        reader,
 		stats:         stats,
-		utils:         GeometryUtils{},
 		smallestArea:  math.Inf(1),
 		largestIndex:  -1,
 		smallestIndex: -1,
@@ -192,7 +185,6 @@ func (StatisticsUtils) AnalyzeShapefile(filename string) (*ShapefileStats, error
 type statisticsCollector struct {
 	reader        *Reader
 	stats         *ShapefileStats
-	utils         GeometryUtils
 	totalArea     float64
 	largestArea   float64
 	smallestArea  float64
@@ -250,7 +242,7 @@ func (s *statisticsCollector) analyzeShape(shape Shape, index int) {
 
 // analyzePolygonArea analyzes polygon area and updates area statistics
 func (s *statisticsCollector) analyzePolygonArea(polygon *Polygon, index int) {
-	area := s.utils.Area(polygon.Points)
+	area := Area(polygon.Points)
 	s.totalArea += area
 
 	if area > s.largestArea {
@@ -370,11 +362,8 @@ func (s *ShapefileStats) String() string {
 	return sb.String()
 }
 
-// FormatUtils 格式化工具函数集合
-type FormatUtils struct{}
-
 // ToGeoJSON 将形状转换为GeoJSON格式的字符串表示
-func (FormatUtils) ToGeoJSON(shape Shape) string {
+func ToGeoJSON(shape Shape) string {
 	switch s := shape.(type) {
 	case *Point:
 		return fmt.Sprintf(`{"type":"Point","coordinates":[%.6f,%.6f]}`, s.X, s.Y)
@@ -390,7 +379,7 @@ func (FormatUtils) ToGeoJSON(shape Shape) string {
 }
 
 // ToWKT 将形状转换为WKT (Well-Known Text) 格式
-func (FormatUtils) ToWKT(shape Shape) string {
+func ToWKT(shape Shape) string {
 	switch s := shape.(type) {
 	case *Point:
 		return fmt.Sprintf("POINT (%.6f %.6f)", s.X, s.Y)
@@ -407,18 +396,30 @@ func (FormatUtils) ToWKT(shape Shape) string {
 
 // formatPointsAsJSON 格式化点数组为JSON坐标格式
 func formatPointsAsJSON(points []Point) string {
-	coords := make([]string, len(points))
+	var sb strings.Builder
+	// 预估容量：每个点约 25 字节
+	sb.Grow(len(points) * 25)
+	
 	for i, p := range points {
-		coords[i] = fmt.Sprintf("[%.6f,%.6f]", p.X, p.Y)
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		fmt.Fprintf(&sb, "[%.6f,%.6f]", p.X, p.Y)
 	}
-	return strings.Join(coords, ",")
+	return sb.String()
 }
 
 // formatPointsAsWKT 格式化点数组为WKT坐标格式
 func formatPointsAsWKT(points []Point) string {
-	coords := make([]string, len(points))
+	var sb strings.Builder
+	// 预估容量：每个点约 25 字节
+	sb.Grow(len(points) * 25)
+
 	for i, p := range points {
-		coords[i] = fmt.Sprintf("%.6f %.6f", p.X, p.Y)
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		fmt.Fprintf(&sb, "%.6f %.6f", p.X, p.Y)
 	}
-	return strings.Join(coords, ", ")
+	return sb.String()
 }

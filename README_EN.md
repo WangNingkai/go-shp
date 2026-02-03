@@ -158,6 +158,38 @@ reader, err := shp.OpenWithConfig("input.shp", shp.DefaultReaderConfig(),
     shp.WithIgnoreCorruptedShapes(true))
 ```
 
+## Development
+
+This project uses Makefile to manage build and testing:
+
+```bash
+# Run all checks (format, lint, test, build)
+make all
+
+# Run tests
+make test
+
+# Run tests with coverage report
+make coverage
+
+# Run benchmarks
+make benchmark
+
+# Run lint checks
+make lint
+
+# View all available commands
+make help
+```
+
+## Performance
+
+This library continues to improve performance optimizations:
+
+- Supports streaming reading, significantly reducing memory usage for large files
+- Provides benchmark data, see `benchmark_test.go`
+- Supports multiple reading strategies (sequential read, buffered read, etc.)
+
 ## License
 
 MIT License - See [LICENSE](LICENSE) file for details.

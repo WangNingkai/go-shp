@@ -672,17 +672,6 @@ func (c GeoJSONConverter) LoadGeoJSONFromFile(filename string) (*GeoJSON, error)
 	return &geoJSON, nil
 }
 
-// Helper functions for file I/O (these would typically be in a separate file)
-func writeFile(filename string, r io.Reader) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = file.Close() }()
-	_, err = io.Copy(file, r)
-	return err
-}
-
 // ShapefileToGeoJSONStream 将 Shapefile 以流式方式写出为 GeoJSON（紧凑格式）。
 // 适合超大文件，避免一次性构建全部 features 切片占用内存。
 // 可通过 ReaderOption（如 WithIgnoreCorruptedShapes(true)）控制读取行为。

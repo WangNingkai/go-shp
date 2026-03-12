@@ -399,7 +399,7 @@ func formatPointsAsJSON(points []Point) string {
 	var sb strings.Builder
 	// 预估容量：每个点约 25 字节
 	sb.Grow(len(points) * 25)
-	
+
 	for i, p := range points {
 		if i > 0 {
 			sb.WriteByte(',')

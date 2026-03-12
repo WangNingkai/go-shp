@@ -137,7 +137,7 @@ func handleBatchConversion(inputDir, outputDir string, skipCorrupted bool) {
 
 	if len(shapefiles) > 0 {
 		fmt.Printf("找到 %d 个 Shapefile，开始转换为 GeoJSON...\n", len(shapefiles))
-		err := shp.BatchConvertShapefilesToGeoJSON(inputDir, outputDir)
+		err := shp.BatchConvertShapefilesToGeoJSONWithSkipCorrupted(inputDir, outputDir, skipCorrupted)
 		if err != nil {
 			log.Fatalf("批量转换 Shapefile 失败：%v", err)
 		}

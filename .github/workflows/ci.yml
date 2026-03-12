@@ -79,13 +79,10 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v2.3.0
-          install-mode: "binary"
-          verify: false
+          version: v1.64
           skip-cache: true
-          args: --disable=unused
 
   benchmark:
     runs-on: ubuntu-latest

@@ -22,11 +22,11 @@ COVERAGE_DIR=coverage
 # Default target
 all: fmt lint test build ## Run fmt, lint, test and build
 
-# Build the library (create example binaries)
-build: ## Build example binaries
-	@echo "Building example binaries..."
+# Build the library and tools
+build: ## Build binaries
+	@echo "Building binaries..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/example ./example
+	$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/convert ./cmd/convert
 
 # Clean build artifacts
 clean: ## Clean build artifacts

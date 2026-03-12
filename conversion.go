@@ -121,6 +121,32 @@ func BatchConvertShapefilesToGeoJSON(inputDir, outputDir string) error {
 	return BatchConvertShapefilesToGeoJSONWithOptions(inputDir, outputDir, false)
 }
 
+// BatchConvertShapefilesToGeoJSONWithSkipCorrupted 批量转换 Shapefile 到 GeoJSON，支持跳过损坏记录.
+func BatchConvertShapefilesToGeoJSONWithSkipCorrupted(inputDir, outputDir string, skipCorrupted bool) error {
+	// 查找所有 .shp 文件
+	shapefiles, err := filepath.Glob(filepath.Join(inputDir, "*.shp"))
+	if err != nil {
+		return err
+	}
+
+	for _, shapefile := range shapefiles {
+		basename := strings.TrimSuffix(filepath.Base(shapefile), ".shp")
+		geojsonPath := filepath.Join(outputDir, basename+".geojson")
+
+		fmt.Printf("Converting %s to %s...\n", shapefile, geojsonPath)
+
+		err := ConvertShapefileToGeoJSONWithOptions(shapefile, geojsonPath, skipCorrupted)
+		if err != nil {
+			fmt.Printf("Error converting %s: %v\n", shapefile, err)
+			continue
+		}
+
+		fmt.Printf("Successfully converted %s\n", shapefile)
+	}
+
+	return nil
+}
+
 // BatchConvertShapefilesToGeoJSONWithOptions 批量转换 Shapefile 到 GeoJSON，支持静默模式.
 func BatchConvertShapefilesToGeoJSONWithOptions(inputDir, outputDir string, silent bool) error {
 	// 查找所有 .shp 文件

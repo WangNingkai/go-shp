@@ -12,3 +12,5 @@ main
 example
 output.*
 build/
+coverage.out
+coverage/

@@ -228,21 +228,27 @@ func (s *statisticsCollector) initializeAttributeStats() {
 // analyzeShape analyzes a single shape and updates statistics
 func (s *statisticsCollector) analyzeShape(shape Shape, index int) {
 	switch sh := shape.(type) {
-	case *Point:
+	case *Point, *PointZ, *PointM:
 		s.stats.ShapeTypes[POINT]++
-	case *PolyLine:
+	case *PolyLine, *PolyLineZ, *PolyLineM:
 		s.stats.ShapeTypes[POLYLINE]++
 	case *Polygon:
 		s.stats.ShapeTypes[POLYGON]++
-		s.analyzePolygonArea(sh, index)
-	case *MultiPoint:
+		s.analyzePolygonArea(sh.Points, index)
+	case *PolygonZ:
+		s.stats.ShapeTypes[POLYGONZ]++
+		s.analyzePolygonArea(sh.Points, index)
+	case *PolygonM:
+		s.stats.ShapeTypes[POLYGONM]++
+		s.analyzePolygonArea(sh.Points, index)
+	case *MultiPoint, *MultiPointZ, *MultiPointM:
 		s.stats.ShapeTypes[MULTIPOINT]++
 	}
 }
 
 // analyzePolygonArea analyzes polygon area and updates area statistics
-func (s *statisticsCollector) analyzePolygonArea(polygon *Polygon, index int) {
-	area := Area(polygon.Points)
+func (s *statisticsCollector) analyzePolygonArea(points []Point, index int) {
+	area := Area(points)
 	s.totalArea += area
 
 	if area > s.largestArea {

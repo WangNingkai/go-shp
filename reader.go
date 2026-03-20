@@ -17,12 +17,11 @@ type Reader struct {
 	bbox         Box
 	err          error
 
-	shp        readSeekCloser
-	shape      Shape
-	num        int32
-	filename   string
-	filelength int64
-	// 调试用
+	shp             readSeekCloser
+	shape           Shape
+	num             int32
+	filename        string
+	filelength      int64
 	shapeCount      int
 	dbf             readSeekCloser
 	dbfFields       []Field
@@ -35,6 +34,13 @@ type Reader struct {
 
 	// internal reusable buffer for attribute reads to reduce allocations
 	attrBuf []byte
+}
+
+// debugf logs a debug message if debug mode is enabled.
+func (r *Reader) debugf(format string, args ...interface{}) {
+	if r.config != nil && r.config.Debug {
+		fmt.Printf(format, args...)
+	}
 }
 
 type readSeekCloser interface {
@@ -192,9 +198,7 @@ func newShape(shapetype ShapeType) (Shape, error) {
 //nolint:gocyclo
 func (r *Reader) Next() bool {
 	r.shapeCount++
-	if r.config != nil && r.config.Debug {
-		fmt.Printf("Processing shape #%d\n", r.shapeCount)
-	}
+	r.debugf("Processing shape #%d\n", r.shapeCount)
 	cur, _ := r.shp.Seek(0, io.SeekCurrent)
 	if cur >= r.filelength {
 		return false
@@ -203,29 +207,22 @@ func (r *Reader) Next() bool {
 	num, size, shapetype, err := readShapeRecordHeader(r.shp)
 	if err != nil {
 		if err == io.EOF {
-			return false // 正常结束，不设置错误
+			return false
 		}
 		if r.config != nil && r.config.IgnoreCorruptedShapes {
-			if r.config.Debug {
-				fmt.Printf("Warning: Error reading shape header, skipping: %v\n", err)
-			}
+			r.debugf("Warning: Error reading shape header, skipping: %v\n", err)
 			return r.trySkipToNextValidShape(cur)
 		}
 		r.err = fmt.Errorf("Error when reading metadata of next shape: %v", err)
 		return false
 	}
 
-	// 添加调试信息
-	if r.config != nil && r.config.Debug {
-		fmt.Printf("Reading shape %d: size=%d, type=%v, position=%d\n", num, size, shapetype, cur)
-	}
+	r.debugf("Reading shape %d: size=%d, type=%v, position=%d\n", num, size, shapetype, cur)
 
 	// 检查记录大小是否合理
 	if size < 0 {
 		if r.config != nil && r.config.IgnoreCorruptedShapes {
-			if r.config.Debug {
-				fmt.Printf("Warning: Invalid negative shape record size: %d at position %d, skipping\n", size, cur)
-			}
+			r.debugf("Warning: Invalid negative shape record size: %d at position %d, skipping\n", size, cur)
 			return r.trySkipToNextValidShape(cur)
 		}
 		r.err = fmt.Errorf("Invalid negative shape record size: %d at position %d", size, cur)
@@ -236,9 +233,7 @@ func (r *Reader) Next() bool {
 	expectedEndPos := cur + int64(size)*2 + 8
 	if expectedEndPos > r.filelength {
 		if r.config != nil && r.config.IgnoreCorruptedShapes {
-			if r.config.Debug {
-				fmt.Printf("Warning: Shape record extends beyond file: expected end %d, file length %d, skipping\n", expectedEndPos, r.filelength)
-			}
+			r.debugf("Warning: Shape record extends beyond file: expected end %d, file length %d, skipping\n", expectedEndPos, r.filelength)
 			return r.trySkipToNextValidShape(cur)
 		}
 		r.err = fmt.Errorf("Shape record extends beyond file: expected end %d, file length %d", expectedEndPos, r.filelength)
@@ -249,15 +244,11 @@ func (r *Reader) Next() bool {
 	r.shape, err = newShape(shapetype)
 	if err != nil {
 		if r.config != nil && r.config.IgnoreCorruptedShapes {
-			if r.config.Debug {
-				fmt.Printf("Warning: Error decoding shape type: %v, skipping\n", err)
-			}
-			// Try to skip to next shape based on size
+			r.debugf("Warning: Error decoding shape type: %v, skipping\n", err)
 			nextPos := cur + int64(size)*2 + 8
 			if nextPos <= r.filelength {
-				_, seekErr := r.shp.Seek(nextPos, 0)
-				if seekErr == nil {
-					return r.Next() // Recursively try next shape
+				if _, seekErr := r.shp.Seek(nextPos, 0); seekErr == nil {
+					return r.Next()
 				}
 			}
 			return false
@@ -266,31 +257,22 @@ func (r *Reader) Next() bool {
 		return false
 	}
 
-	// 在读取前记录当前位置
 	beforeRead, _ := r.shp.Seek(0, io.SeekCurrent)
-	if r.config != nil && r.config.Debug {
-		fmt.Printf("About to read shape data at position %d\n", beforeRead)
-	}
+	r.debugf("About to read shape data at position %d\n", beforeRead)
 
 	er := &errReader{Reader: r.shp}
 	r.shape.read(er)
 	if er.e != nil {
 		if r.config != nil && r.config.IgnoreCorruptedShapes {
 			if er.e == io.EOF {
-				if r.config.Debug {
-					fmt.Printf("Warning: Unexpected end of file while reading shape %d at position %d, skipping\n", num, beforeRead)
-				}
+				r.debugf("Warning: Unexpected end of file while reading shape %d at position %d, skipping\n", num, beforeRead)
 			} else {
-				if r.config.Debug {
-					fmt.Printf("Warning: Error while reading shape %d: %v, skipping\n", num, er.e)
-				}
+				r.debugf("Warning: Error while reading shape %d: %v, skipping\n", num, er.e)
 			}
-			// Try to skip to next shape based on size
 			nextPos := cur + int64(size)*2 + 8
 			if nextPos <= r.filelength {
-				_, seekErr := r.shp.Seek(nextPos, 0)
-				if seekErr == nil {
-					return r.Next() // Recursively try next shape
+				if _, seekErr := r.shp.Seek(nextPos, 0); seekErr == nil {
+					return r.Next()
 				}
 			}
 			return false
@@ -303,14 +285,10 @@ func (r *Reader) Next() bool {
 		return false
 	}
 
-	// 验证读取后的位置
 	afterRead, _ := r.shp.Seek(0, io.SeekCurrent)
 	expectedPos := beforeRead + int64(size)*2
 	if afterRead != expectedPos {
-		if r.config != nil && r.config.Debug {
-			fmt.Printf("Warning: position mismatch after reading shape %d. Expected: %d, Actual: %d\n",
-				num, expectedPos, afterRead)
-		}
+		r.debugf("Warning: position mismatch after reading shape %d. Expected: %d, Actual: %d\n", num, expectedPos, afterRead)
 	}
 
 	// move to next object
@@ -318,9 +296,7 @@ func (r *Reader) Next() bool {
 	_, err = r.shp.Seek(nextPos, 0)
 	if err != nil {
 		if r.config != nil && r.config.IgnoreCorruptedShapes {
-			if r.config.Debug {
-				fmt.Printf("Warning: Error seeking to next position %d: %v, skipping\n", nextPos, err)
-			}
+			r.debugf("Warning: Error seeking to next position %d: %v, skipping\n", nextPos, err)
 			return false
 		}
 		r.err = fmt.Errorf("Error seeking to next position %d: %v", nextPos, err)
@@ -334,9 +310,7 @@ func (r *Reader) Next() bool {
 //
 //nolint:gocyclo
 func (r *Reader) trySkipToNextValidShape(currentPos int64) bool {
-	if r.config != nil && r.config.Debug {
-		fmt.Printf("Attempting to skip corrupted shape and find next valid shape...\n")
-	}
+	r.debugf("Attempting to skip corrupted shape and find next valid shape...\n")
 
 	// 从当前位置开始，以小步长前进寻找下一个有效的shape头
 	for pos := currentPos + 8; pos < r.filelength-8; pos += 4 {
@@ -356,56 +330,18 @@ func (r *Reader) trySkipToNextValidShape(currentPos int64) bool {
 			(shapetype >= NULL && shapetype <= MULTIPATCH) { // 有效的shape类型
 			expectedEndPos := pos + int64(size)*2 + 8
 			if expectedEndPos <= r.filelength {
-				if r.config != nil && r.config.Debug {
-					fmt.Printf("Found potential valid shape at position %d\n", pos)
-				}
-				// 重新定位到这个位置，让下一次Next()调用处理它
+				r.debugf("Found potential valid shape at position %d\n", pos)
 				_, err = r.shp.Seek(pos, 0)
 				if err == nil {
-					return r.Next() // 递归调用Next尝试读取这个shape
+					return r.Next()
 				}
 			}
 		}
 	}
 
-	if r.config != nil && r.config.Debug {
-		fmt.Printf("No more valid shapes found\n")
-	}
+	r.debugf("No more valid shapes found\n")
 	return false
 }
-
-// func (r *Reader) Next() bool {
-// 	cur, _ := r.shp.Seek(0, io.SeekCurrent)
-// 	if cur >= r.filelength {
-// 		return false
-// 	}
-
-// 	num, size, shapetype, err := readShapeRecordHeader(r.shp)
-// 	if err != nil {
-// 		if err != io.EOF {
-// 			r.err = fmt.Errorf("Error when reading metadata of next shape: %v", err)
-// 		} else {
-// 			r.err = io.EOF
-// 		}
-// 		return false
-// 	}
-// 	r.num = num
-// 	r.shape, err = newShape(shapetype)
-// 	if err != nil {
-// 		r.err = fmt.Errorf("Error decoding shape type: %v", err)
-// 		return false
-// 	}
-// 	er := &errReader{Reader: r.shp}
-// 	r.shape.read(er)
-// 	if er.e != nil {
-// 		r.err = fmt.Errorf("Error while reading next shape: %v", er.e)
-// 		return false
-// 	}
-
-// 	// move to next object
-// 	_, _ = r.shp.Seek(int64(size)*2+cur+8, 0)
-// 	return true
-// }
 
 // Opens DBF file using r.filename + "dbf". This method
 // will parse the header and fill out all dbf* values int

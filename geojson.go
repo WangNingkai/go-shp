@@ -161,7 +161,7 @@ func (c GeoJSONConverter) polyLineToGeoJSON(parts []int32, points []Point, zArra
 	}
 
 	// MultiLineString
-	lineStrings := make([]interface{}, 0, len(parts))
+	lineStrings := make([][][]float64, 0, len(parts))
 	for i, part := range parts {
 		var endIdx int
 		if i+1 < len(parts) {
@@ -179,8 +179,7 @@ func (c GeoJSONConverter) polyLineToGeoJSON(parts []int32, points []Point, zArra
 			lineMArray = mArray[part:endIdx]
 		}
 
-		coords := c.pointsToCoordinates(linePoints, lineZArray, lineMArray)
-		lineStrings = append(lineStrings, coords)
+		lineStrings = append(lineStrings, c.pointsToCoordinates(linePoints, lineZArray, lineMArray))
 	}
 
 	return &Geometry{
@@ -195,7 +194,7 @@ func (c GeoJSONConverter) polygonToGeoJSON(parts []int32, points []Point, zArray
 		return nil, fmt.Errorf("no parts in polygon")
 	}
 
-	rings := make([]interface{}, 0, len(parts))
+	rings := make([][][]float64, 0, len(parts))
 	for i, part := range parts {
 		var endIdx int
 		if i+1 < len(parts) {
@@ -213,8 +212,7 @@ func (c GeoJSONConverter) polygonToGeoJSON(parts []int32, points []Point, zArray
 			ringMArray = mArray[part:endIdx]
 		}
 
-		coords := c.pointsToCoordinates(ringPoints, ringZArray, ringMArray)
-		rings = append(rings, coords)
+		rings = append(rings, c.pointsToCoordinates(ringPoints, ringZArray, ringMArray))
 	}
 
 	// For simplicity, treat all as single Polygon with multiple rings
@@ -253,58 +251,7 @@ func (c GeoJSONConverter) FeatureToGeoJSON(shape Shape, properties map[string]in
 
 // ShapefileToGeoJSON converts an entire shapefile to a GeoJSON FeatureCollection
 func (c GeoJSONConverter) ShapefileToGeoJSON(filename string) (*GeoJSON, error) {
-	reader, err := Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = reader.Close() }()
-
-	// 预分配 features 容量，减少扩容与拷贝
-	capHint := reader.AttributeCount()
-	if capHint < 0 {
-		capHint = 0
-	}
-	features := make([]*Feature, 0, capHint)
-	fields := reader.Fields()
-
-	for reader.Next() {
-		n, shape := reader.Shape()
-
-		// Get attributes
-		properties := make(map[string]interface{}, len(fields))
-		for i, field := range fields {
-			attr := reader.ReadAttribute(n, i)
-			if attr == "" {
-				properties[field.String()] = nil
-				continue
-			}
-			if iVal, err := strconv.ParseInt(attr, 10, 64); err == nil {
-				properties[field.String()] = iVal
-			} else if fVal, err := strconv.ParseFloat(attr, 64); err == nil {
-				properties[field.String()] = fVal
-			} else if attr == boolTrue || attr == boolFalse {
-				properties[field.String()] = (attr == boolTrue)
-			} else {
-				properties[field.String()] = attr
-			}
-		}
-
-		feature, err := c.FeatureToGeoJSON(shape, properties)
-		if err != nil {
-			continue // Skip invalid geometries
-		}
-
-		features = append(features, feature)
-	}
-
-	if err := reader.Err(); err != nil {
-		return nil, err
-	}
-
-	return &GeoJSON{
-		Type:     "FeatureCollection",
-		Features: features,
-	}, nil
+	return c.ShapefileToGeoJSONWithOptions(filename)
 }
 
 // ShapefileToGeoJSONWithOptions converts an entire shapefile to a GeoJSON FeatureCollection with options
@@ -325,7 +272,6 @@ func (c GeoJSONConverter) ShapefileToGeoJSONWithOptions(filename string, opts ..
 	for reader.Next() {
 		n, shape := reader.Shape()
 
-		// Get attributes
 		properties := make(map[string]interface{}, len(fields))
 		for i, field := range fields {
 			attr := reader.ReadAttribute(n, i)
@@ -346,14 +292,12 @@ func (c GeoJSONConverter) ShapefileToGeoJSONWithOptions(filename string, opts ..
 
 		feature, err := c.FeatureToGeoJSON(shape, properties)
 		if err != nil {
-			continue // Skip invalid geometries
+			continue
 		}
 
 		features = append(features, feature)
 	}
 
-	// 注意：这里我们不检查reader.Err()，因为在容错模式下可能会有一些可恢复的错误
-	// 只要我们成功读取了一些features，就返回结果
 	if err := reader.Err(); err != nil && len(features) == 0 {
 		return nil, err
 	}
@@ -573,7 +517,8 @@ func (c GeoJSONConverter) geoJSONPolygonToShape(geom *Geometry) (Shape, error) {
 		return nil, fmt.Errorf("invalid Polygon coordinates")
 	}
 
-	var parts [][]Point
+	var allPoints []Point
+	parts := make([]int32, 0, len(coords))
 	for _, ringCoords := range coords {
 		ringCoordArr, ok := ringCoords.([]interface{})
 		if !ok {
@@ -584,16 +529,16 @@ func (c GeoJSONConverter) geoJSONPolygonToShape(geom *Geometry) (Shape, error) {
 		if err != nil {
 			return nil, err
 		}
-		parts = append(parts, points)
+		parts = append(parts, int32(len(allPoints)))
+		allPoints = append(allPoints, points...)
 	}
 
-	polyline := NewPolyLine(parts)
 	return &Polygon{
-		Box:       polyline.Box,
-		NumParts:  polyline.NumParts,
-		NumPoints: polyline.NumPoints,
-		Parts:     polyline.Parts,
-		Points:    polyline.Points,
+		Box:       BBoxFromPoints(allPoints),
+		NumParts:  int32(len(parts)),
+		NumPoints: int32(len(allPoints)),
+		Parts:     parts,
+		Points:    allPoints,
 	}, nil
 }
 
@@ -658,17 +603,16 @@ func (c GeoJSONConverter) SaveGeoJSONToFile(geoJSON *GeoJSON, filename string, c
 
 // LoadGeoJSONFromFile loads a GeoJSON object from a file
 func (c GeoJSONConverter) LoadGeoJSONFromFile(filename string) (*GeoJSON, error) {
-	data, err := os.ReadFile(filename)
+	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = file.Close() }()
 
 	var geoJSON GeoJSON
-	err = json.Unmarshal(data, &geoJSON)
-	if err != nil {
+	if err := json.NewDecoder(file).Decode(&geoJSON); err != nil {
 		return nil, err
 	}
-
 	return &geoJSON, nil
 }
 

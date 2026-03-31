@@ -357,6 +357,9 @@ func (c GeoJSONConverter) GeoJSONToShapefile(geoJSON *GeoJSON, filename string) 
 
 // determineShapeType determines the Shapefile shape type from GeoJSON geometry type
 func (c GeoJSONConverter) determineShapeType(geom *Geometry) (ShapeType, error) {
+	if geom == nil {
+		return NULL, fmt.Errorf("geometry is nil")
+	}
 	switch geom.Type {
 	case "Point":
 		return POINT, nil

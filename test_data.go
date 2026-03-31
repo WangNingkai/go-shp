@@ -1,6 +1,3 @@
-//go:build test
-// +build test
-
 package shp
 
 // 测试用的共享数据定义
@@ -32,13 +29,4 @@ var SamplePolygonPoints = []Point{
 var SamplePoints = []Point{
 	{X: 0.0, Y: 0.0},
 	{X: 3.0, Y: 4.0},
-}
-
-// createSampleBoundingBoxPoints 创建用于边界框计算的示例点
-func createSampleBoundingBoxPoints(count int) []Point {
-	points := make([]Point, count)
-	for i := range points {
-		points[i] = Point{X: float64(i), Y: float64(i * 2)}
-	}
-	return points
 }

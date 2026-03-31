@@ -307,8 +307,6 @@ func (r *Reader) Next() bool {
 }
 
 // trySkipToNextValidShape 尝试跳过损坏的shape，寻找下一个有效的shape
-//
-//nolint:gocyclo
 func (r *Reader) trySkipToNextValidShape(currentPos int64) bool {
 	r.debugf("Attempting to skip corrupted shape and find next valid shape...\n")
 
@@ -396,6 +394,12 @@ func (r *Reader) AttributeCount() int {
 // the DBF table as a string. Both values starts at 0.
 func (r *Reader) ReadAttribute(row int, field int) string {
 	_ = r.openDbf() // make sure we have a dbf file to read from
+	if field < 0 || field >= len(r.dbfFields) {
+		return ""
+	}
+	if row < 0 || row >= int(r.dbfNumRecords) {
+		return ""
+	}
 	seekTo := dbfFieldOffset(r.dbfHeaderLength, r.dbfRecordLength, row, r.dbfFields, field)
 	_, _ = r.dbf.Seek(seekTo, io.SeekStart)
 	size := int(r.dbfFields[field].Size)

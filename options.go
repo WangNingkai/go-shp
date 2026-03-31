@@ -46,7 +46,9 @@ func WithMaxMemoryUsage(size int64) ReaderOption {
 func WithBuffering(enabled bool, size int) ReaderOption {
 	return func(config *ReaderConfig) {
 		config.EnableBuffering = enabled
-		config.BufferSize = size
+		if size > 0 {
+			config.BufferSize = size
+		}
 	}
 }
 

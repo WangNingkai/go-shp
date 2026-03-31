@@ -327,6 +327,9 @@ func (w *Writer) writeEmptyRecord() {
 // Shapefile. The field value corresponds to the field in the slice used in
 // SetFields.
 func (w *Writer) WriteAttribute(row int, field int, value interface{}) error {
+	if field < 0 || field >= len(w.dbfFields) {
+		return fmt.Errorf("field index %d out of range [0, %d)", field, len(w.dbfFields))
+	}
 	var buf []byte
 	switch v := value.(type) {
 	case int:

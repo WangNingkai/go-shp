@@ -112,14 +112,14 @@ func (r *Reader) readHeaders() error {
 	if f, ok := r.shp.(*os.File); ok {
 		stat, err := f.Stat()
 		if err != nil {
-			return fmt.Errorf("failed to get file stats: %v", err)
+			return NewShapeError(ErrIO, "failed to get file stats", err)
 		}
 		actualSize = stat.Size()
 	} else {
 		// Fallback for buffered reader
 		stat, err := os.Stat(r.filename + ".shp")
 		if err != nil {
-			return fmt.Errorf("failed to get file stats: %v", err)
+			return NewShapeError(ErrIO, "failed to get file stats", err)
 		}
 		actualSize = stat.Size()
 	}
@@ -129,7 +129,7 @@ func (r *Reader) readHeaders() error {
 	}
 
 	if fl > actualSize {
-		return fmt.Errorf("header reports file length %d but actual file size is %d", fl, actualSize)
+		return NewShapeError(ErrCorruptedFile, fmt.Sprintf("header reports file length %d but actual file size is %d", fl, actualSize), nil)
 	}
 
 	r.filelength = fl
@@ -213,7 +213,7 @@ func (r *Reader) Next() bool {
 			r.debugf("Warning: Error reading shape header, skipping: %v\n", err)
 			return r.trySkipToNextValidShape(cur)
 		}
-		r.err = fmt.Errorf("Error when reading metadata of next shape: %v", err)
+		r.err = NewShapeError(ErrCorruptedFile, fmt.Sprintf("error reading metadata of next shape at position %d", cur), err)
 		return false
 	}
 
@@ -225,7 +225,7 @@ func (r *Reader) Next() bool {
 			r.debugf("Warning: Invalid negative shape record size: %d at position %d, skipping\n", size, cur)
 			return r.trySkipToNextValidShape(cur)
 		}
-		r.err = fmt.Errorf("Invalid negative shape record size: %d at position %d", size, cur)
+		r.err = NewShapeError(ErrCorruptedFile, fmt.Sprintf("invalid negative shape record size: %d at position %d", size, cur), nil)
 		return false
 	}
 
@@ -236,7 +236,7 @@ func (r *Reader) Next() bool {
 			r.debugf("Warning: Shape record extends beyond file: expected end %d, file length %d, skipping\n", expectedEndPos, r.filelength)
 			return r.trySkipToNextValidShape(cur)
 		}
-		r.err = fmt.Errorf("Shape record extends beyond file: expected end %d, file length %d", expectedEndPos, r.filelength)
+		r.err = NewShapeError(ErrCorruptedFile, fmt.Sprintf("shape record extends beyond file: expected end %d, file length %d", expectedEndPos, r.filelength), nil)
 		return false
 	}
 
@@ -253,7 +253,7 @@ func (r *Reader) Next() bool {
 			}
 			return false
 		}
-		r.err = fmt.Errorf("Error decoding shape type: %v", err)
+		r.err = NewShapeError(ErrUnsupportedType, fmt.Sprintf("error decoding shape type %d at position %d", shapetype, cur), err)
 		return false
 	}
 
@@ -299,7 +299,7 @@ func (r *Reader) Next() bool {
 			r.debugf("Warning: Error seeking to next position %d: %v, skipping\n", nextPos, err)
 			return false
 		}
-		r.err = fmt.Errorf("Error seeking to next position %d: %v", nextPos, err)
+		r.err = NewShapeError(ErrIO, fmt.Sprintf("error seeking to next position %d", nextPos), err)
 		return false
 	}
 

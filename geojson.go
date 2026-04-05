@@ -89,10 +89,11 @@ func (c GeoJSONConverter) pointZToGeoJSON(s *PointZ) (*Geometry, error) {
 }
 
 // pointMToGeoJSON converts PointM to GeoJSON
+// Note: GeoJSON doesn't have a standard M representation, so we include it as the 4th coordinate value
 func (c GeoJSONConverter) pointMToGeoJSON(s *PointM) (*Geometry, error) {
 	return &Geometry{
 		Type:        "Point",
-		Coordinates: []float64{s.X, s.Y},
+		Coordinates: []float64{s.X, s.Y, 0, s.M}, // X, Y, Z=0, M
 	}, nil
 }
 
@@ -125,10 +126,15 @@ func (c GeoJSONConverter) multiPointZToGeoJSON(s *MultiPointZ) (*Geometry, error
 }
 
 // multiPointMToGeoJSON converts MultiPointM to GeoJSON
+// Note: M values are included as the 4th coordinate value (X, Y, Z=0, M)
 func (c GeoJSONConverter) multiPointMToGeoJSON(s *MultiPointM) (*Geometry, error) {
 	coords := make([][]float64, len(s.Points))
 	for i, p := range s.Points {
-		coords[i] = []float64{p.X, p.Y}
+		m := 0.0
+		if i < len(s.MArray) {
+			m = s.MArray[i]
+		}
+		coords[i] = []float64{p.X, p.Y, 0, m} // X, Y, Z=0, M
 	}
 	return &Geometry{
 		Type:        "MultiPoint",
@@ -223,14 +229,23 @@ func (c GeoJSONConverter) polygonToGeoJSON(parts []int32, points []Point, zArray
 }
 
 // pointsToCoordinates converts points to coordinate arrays
-func (c GeoJSONConverter) pointsToCoordinates(points []Point, zArray, _ []float64) [][]float64 {
+// zArray and mArray are optional; if both provided, output is [X, Y, Z, M]
+func (c GeoJSONConverter) pointsToCoordinates(points []Point, zArray, mArray []float64) [][]float64 {
 	coords := make([][]float64, len(points))
 	for i, p := range points {
-		coord := []float64{p.X, p.Y}
-		if zArray != nil && i < len(zArray) {
-			coord = append(coord, zArray[i])
+		hasZ := zArray != nil && i < len(zArray)
+		hasM := mArray != nil && i < len(mArray)
+
+		switch {
+		case hasZ && hasM:
+			coords[i] = []float64{p.X, p.Y, zArray[i], mArray[i]}
+		case hasZ:
+			coords[i] = []float64{p.X, p.Y, zArray[i]}
+		case hasM:
+			coords[i] = []float64{p.X, p.Y, 0, mArray[i]} // Z=0, M
+		default:
+			coords[i] = []float64{p.X, p.Y}
 		}
-		coords[i] = coord
 	}
 	return coords
 }

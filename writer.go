@@ -25,6 +25,10 @@ type Writer struct {
 	dbfFields       []Field
 	dbfHeaderLength int16
 	dbfRecordLength int16
+
+	// Configuration
+	config    *WriterConfig
+	validator Validator
 }
 
 type writeSeekCloser interface {
@@ -41,6 +45,11 @@ type writeSeekCloser interface {
 // If filename does not end on ".shp" already, it will be treated as the basename
 // for the file and the ".shp" extension will be appended to that name.
 func Create(filename string, t ShapeType) (*Writer, error) {
+	return CreateWithOptions(filename, t, DefaultWriterConfig())
+}
+
+// CreateWithOptions creates a new Writer with custom configuration.
+func CreateWithOptions(filename string, t ShapeType, config *WriterConfig) (*Writer, error) {
 	if strings.HasSuffix(strings.ToLower(filename), ".shp") {
 		filename = filename[0 : len(filename)-4]
 	}
@@ -59,6 +68,10 @@ func Create(filename string, t ShapeType) (*Writer, error) {
 		shp:          shp,
 		shx:          shx,
 		GeometryType: t,
+		config:       config,
+	}
+	if config.EnableValidation {
+		w.validator = &DefaultValidator{}
 	}
 	return w, nil
 }
@@ -184,7 +197,17 @@ func openAndInitDbf(basename string, w *Writer) error {
 // a record in the SHX file and DBF file (if it is
 // initialized). Returns the index of the written object
 // which can be used in WriteAttribute.
+// Note: If validation is enabled and the shape is invalid,
+// it returns -1 and skips writing.
 func (w *Writer) Write(shape Shape) int32 {
+	// Validate shape if validator is configured
+	if w.validator != nil {
+		if err := w.validator.Validate(shape); err != nil {
+			// Validation failed, skip this shape
+			return -1
+		}
+	}
+
 	// increate bbox
 	if w.num == 0 {
 		w.bbox = shape.BBox()

@@ -1,6 +1,7 @@
 package shp
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -37,7 +38,7 @@ type Reader struct {
 }
 
 // debugf logs a debug message if debug mode is enabled.
-func (r *Reader) debugf(format string, args ...interface{}) {
+func (r *Reader) debugf(format string, args ...any) {
 	if r.config != nil && r.config.Debug {
 		fmt.Printf(format, args...)
 	}
@@ -143,7 +144,13 @@ func (r *Reader) Close() error {
 	if r.err == nil {
 		r.err = r.shp.Close()
 		if r.dbf != nil {
-			_ = r.dbf.Close()
+			if dbfErr := r.dbf.Close(); dbfErr != nil {
+				if r.err == nil {
+					r.err = dbfErr
+				} else {
+					r.err = errors.Join(r.err, dbfErr)
+				}
+			}
 		}
 	}
 	return r.err

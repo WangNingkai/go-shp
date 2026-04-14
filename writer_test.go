@@ -172,7 +172,7 @@ func TestWriteAttribute(t *testing.T) {
 		name       string
 		row        int
 		field      int
-		data       interface{}
+		data       any
 		wantOffset int64
 		wantData   string
 	}{

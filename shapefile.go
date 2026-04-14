@@ -692,35 +692,48 @@ func (f Field) String() string {
 }
 
 // StringField returns a Field that can be used in SetFields to initialize the
-// DBF file.
+// DBF file. Name is truncated to 11 bytes if longer.
 func StringField(name string, length uint8) Field {
-	// TODO: Error checking
 	field := Field{Fieldtype: 'C', Size: length}
+	if len(name) > 11 {
+		name = name[:11]
+	}
 	copy(field.Name[:], []byte(name))
 	return field
 }
 
 // NumberField returns a Field that can be used in SetFields to initialize the
-// DBF file.
+// DBF file. Name is truncated to 11 bytes if longer.
 func NumberField(name string, length uint8) Field {
 	field := Field{Fieldtype: 'N', Size: length}
+	if len(name) > 11 {
+		name = name[:11]
+	}
 	copy(field.Name[:], []byte(name))
 	return field
 }
 
 // FloatField returns a Field that can be used in SetFields to initialize the
 // DBF file. Used to store floating points with precision in the DBF.
+// Name is truncated to 11 bytes if longer.
 func FloatField(name string, length uint8, precision uint8) Field {
 	field := Field{Fieldtype: 'F', Size: length, Precision: precision}
+	if len(name) > 11 {
+		name = name[:11]
+	}
 	copy(field.Name[:], []byte(name))
 	return field
 }
 
-// DateField feturns a Field that can be used in SetFields to initialize the
+// DateField returns a Field that can be used in SetFields to initialize the
 // DBF file. Used to store Date strings formatted as YYYYMMDD. Data wise this
 // is the same as a StringField with length 8.
+// Name is truncated to 11 bytes if longer.
 func DateField(name string) Field {
 	field := Field{Fieldtype: 'D', Size: 8}
+	if len(name) > 11 {
+		name = name[:11]
+	}
 	copy(field.Name[:], []byte(name))
 	return field
 }

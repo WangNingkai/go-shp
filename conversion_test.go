@@ -50,7 +50,7 @@ func TestConvertShapefileToGeoJSON(t *testing.T) {
 				if readErr != nil {
 					t.Fatalf("failed to read output file: %v", readErr)
 				}
-				var result map[string]interface{}
+				var result map[string]any
 				if jsonErr := json.Unmarshal(data, &result); jsonErr != nil {
 					t.Errorf("output is not valid JSON: %v", jsonErr)
 				}
@@ -67,7 +67,7 @@ func TestConvertShapefileToGeoJSONWithOptions(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		data, _ := os.ReadFile(outFile)
-		var result map[string]interface{}
+		var result map[string]any
 		if json.Unmarshal(data, &result) != nil {
 			t.Error("output is not valid JSON")
 		}
@@ -189,7 +189,7 @@ func TestConvertGeoJSONToShapefile(t *testing.T) {
 						Type:        "Point",
 						Coordinates: []float64{-122.4194, 37.7749},
 					},
-					Properties: map[string]interface{}{
+					Properties: map[string]any{
 						"name": "San Francisco",
 					},
 				},
@@ -199,7 +199,7 @@ func TestConvertGeoJSONToShapefile(t *testing.T) {
 						Type:        "Point",
 						Coordinates: []float64{-74.0059, 40.7128},
 					},
-					Properties: map[string]interface{}{
+					Properties: map[string]any{
 						"name": "New York",
 					},
 				},
@@ -291,7 +291,7 @@ func TestConvertShapefileToGeoJSONSkipCorrupted(t *testing.T) {
 		t.Fatalf("ConvertShapefileToGeoJSONSkipCorrupted() error: %v", err)
 	}
 	data, _ := os.ReadFile(outFile)
-	var result map[string]interface{}
+	var result map[string]any
 	if json.Unmarshal(data, &result) != nil {
 		t.Error("output is not valid JSON")
 	}
@@ -318,7 +318,7 @@ func TestShapeToGeoJSONString(t *testing.T) {
 				return
 			}
 			if !tt.wantErr {
-				var result map[string]interface{}
+				var result map[string]any
 				if json.Unmarshal([]byte(got), &result) != nil {
 					t.Error("output is not valid JSON")
 				}

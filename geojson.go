@@ -15,23 +15,23 @@ const (
 
 // GeoJSON represents a complete GeoJSON object
 type GeoJSON struct {
-	Type       string                 `json:"type"`
-	Features   []*Feature             `json:"features,omitempty"`
-	Geometry   *Geometry              `json:"geometry,omitempty"`
-	Properties map[string]interface{} `json:"properties,omitempty"`
+	Type       string         `json:"type"`
+	Features   []*Feature     `json:"features,omitempty"`
+	Geometry   *Geometry      `json:"geometry,omitempty"`
+	Properties map[string]any `json:"properties,omitempty"`
 }
 
 // Feature represents a GeoJSON Feature
 type Feature struct {
-	Type       string                 `json:"type"`
-	Geometry   *Geometry              `json:"geometry"`
-	Properties map[string]interface{} `json:"properties"`
+	Type       string         `json:"type"`
+	Geometry   *Geometry      `json:"geometry"`
+	Properties map[string]any `json:"properties"`
 }
 
 // Geometry represents a GeoJSON Geometry
 type Geometry struct {
 	Type        string      `json:"type"`
-	Coordinates interface{} `json:"coordinates"`
+	Coordinates any         `json:"coordinates"`
 	Geometries  []*Geometry `json:"geometries,omitempty"`
 }
 
@@ -251,7 +251,7 @@ func (c GeoJSONConverter) pointsToCoordinates(points []Point, zArray, mArray []f
 }
 
 // FeatureToGeoJSON converts a shape with attributes to a GeoJSON Feature
-func (c GeoJSONConverter) FeatureToGeoJSON(shape Shape, properties map[string]interface{}) (*Feature, error) {
+func (c GeoJSONConverter) FeatureToGeoJSON(shape Shape, properties map[string]any) (*Feature, error) {
 	geometry, err := c.ShapeToGeoJSON(shape)
 	if err != nil {
 		return nil, err
@@ -287,7 +287,7 @@ func (c GeoJSONConverter) ShapefileToGeoJSONWithOptions(filename string, opts ..
 	for reader.Next() {
 		n, shape := reader.Shape()
 
-		properties := make(map[string]interface{}, len(fields))
+		properties := make(map[string]any, len(fields))
 		for i, field := range fields {
 			attr := reader.ReadAttribute(n, i)
 			if attr == "" {
@@ -390,7 +390,7 @@ func (c GeoJSONConverter) determineShapeType(geom *Geometry) (ShapeType, error) 
 }
 
 // createFieldsFromProperties creates DBF fields from GeoJSON properties
-func (c GeoJSONConverter) createFieldsFromProperties(properties map[string]interface{}) []Field {
+func (c GeoJSONConverter) createFieldsFromProperties(properties map[string]any) []Field {
 	var fields []Field
 
 	for name, value := range properties {
@@ -439,7 +439,7 @@ func (c GeoJSONConverter) GeoJSONToShape(geom *Geometry, _ ShapeType) (Shape, er
 
 // geoJSONPointToShape converts GeoJSON Point to Shape
 func (c GeoJSONConverter) geoJSONPointToShape(geom *Geometry) (Shape, error) {
-	coords, ok := geom.Coordinates.([]interface{})
+	coords, ok := geom.Coordinates.([]any)
 	if !ok || len(coords) < 2 {
 		return nil, fmt.Errorf("invalid Point coordinates")
 	}
@@ -458,14 +458,14 @@ func (c GeoJSONConverter) geoJSONPointToShape(geom *Geometry) (Shape, error) {
 
 // geoJSONMultiPointToShape converts GeoJSON MultiPoint to Shape
 func (c GeoJSONConverter) geoJSONMultiPointToShape(geom *Geometry) (Shape, error) {
-	coords, ok := geom.Coordinates.([]interface{})
+	coords, ok := geom.Coordinates.([]any)
 	if !ok {
 		return nil, fmt.Errorf("invalid MultiPoint coordinates")
 	}
 
 	points := make([]Point, len(coords))
 	for i, coord := range coords {
-		coordArr, ok := coord.([]interface{})
+		coordArr, ok := coord.([]any)
 		if !ok || len(coordArr) < 2 {
 			return nil, fmt.Errorf("invalid MultiPoint coordinate")
 		}
@@ -491,7 +491,7 @@ func (c GeoJSONConverter) geoJSONMultiPointToShape(geom *Geometry) (Shape, error
 
 // geoJSONLineStringToShape converts GeoJSON LineString to Shape
 func (c GeoJSONConverter) geoJSONLineStringToShape(geom *Geometry) (Shape, error) {
-	coords, ok := geom.Coordinates.([]interface{})
+	coords, ok := geom.Coordinates.([]any)
 	if !ok {
 		return nil, fmt.Errorf("invalid LineString coordinates")
 	}
@@ -506,14 +506,14 @@ func (c GeoJSONConverter) geoJSONLineStringToShape(geom *Geometry) (Shape, error
 
 // geoJSONMultiLineStringToShape converts GeoJSON MultiLineString to Shape
 func (c GeoJSONConverter) geoJSONMultiLineStringToShape(geom *Geometry) (Shape, error) {
-	coords, ok := geom.Coordinates.([]interface{})
+	coords, ok := geom.Coordinates.([]any)
 	if !ok {
 		return nil, fmt.Errorf("invalid MultiLineString coordinates")
 	}
 
 	var parts [][]Point
 	for _, lineCoords := range coords {
-		lineCoordArr, ok := lineCoords.([]interface{})
+		lineCoordArr, ok := lineCoords.([]any)
 		if !ok {
 			return nil, fmt.Errorf("invalid MultiLineString line coordinates")
 		}
@@ -530,7 +530,7 @@ func (c GeoJSONConverter) geoJSONMultiLineStringToShape(geom *Geometry) (Shape, 
 
 // geoJSONPolygonToShape converts GeoJSON Polygon to Shape
 func (c GeoJSONConverter) geoJSONPolygonToShape(geom *Geometry) (Shape, error) {
-	coords, ok := geom.Coordinates.([]interface{})
+	coords, ok := geom.Coordinates.([]any)
 	if !ok {
 		return nil, fmt.Errorf("invalid Polygon coordinates")
 	}
@@ -538,7 +538,7 @@ func (c GeoJSONConverter) geoJSONPolygonToShape(geom *Geometry) (Shape, error) {
 	var allPoints []Point
 	parts := make([]int32, 0, len(coords))
 	for _, ringCoords := range coords {
-		ringCoordArr, ok := ringCoords.([]interface{})
+		ringCoordArr, ok := ringCoords.([]any)
 		if !ok {
 			return nil, fmt.Errorf("invalid Polygon ring coordinates")
 		}
@@ -561,10 +561,10 @@ func (c GeoJSONConverter) geoJSONPolygonToShape(geom *Geometry) (Shape, error) {
 }
 
 // coordinatesToPoints converts coordinate arrays to Point slice
-func (c GeoJSONConverter) coordinatesToPoints(coords []interface{}) ([]Point, error) {
+func (c GeoJSONConverter) coordinatesToPoints(coords []any) ([]Point, error) {
 	points := make([]Point, len(coords))
 	for i, coord := range coords {
-		coordArr, ok := coord.([]interface{})
+		coordArr, ok := coord.([]any)
 		if !ok || len(coordArr) < 2 {
 			return nil, fmt.Errorf("invalid coordinate")
 		}
@@ -584,7 +584,7 @@ func (c GeoJSONConverter) coordinatesToPoints(coords []interface{}) ([]Point, er
 }
 
 // toFloat64 converts interface{} to float64
-func (c GeoJSONConverter) toFloat64(val interface{}) (float64, error) {
+func (c GeoJSONConverter) toFloat64(val any) (float64, error) {
 	switch v := val.(type) {
 	case float64:
 		return v, nil
@@ -656,7 +656,7 @@ func (c GeoJSONConverter) ShapefileToGeoJSONStream(shpPath string, w io.Writer, 
 
 	for reader.Next() {
 		n, shape := reader.Shape()
-		props := make(map[string]interface{}, len(fields))
+		props := make(map[string]any, len(fields))
 		for i, field := range fields {
 			attr := reader.ReadAttribute(n, i)
 			if attr == "" {

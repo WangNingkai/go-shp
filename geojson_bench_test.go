@@ -22,7 +22,7 @@ func BenchmarkGeoJSONToShape(b *testing.B) {
 	// 创建一个 GeoJSON geometry
 	geometry := &Geometry{
 		Type:        "Point",
-		Coordinates: []interface{}{-122.4194, 37.7749},
+		Coordinates: []any{-122.4194, 37.7749},
 	}
 	converter := GeoJSONConverter{}
 

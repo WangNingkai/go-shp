@@ -349,7 +349,7 @@ func (w *Writer) writeEmptyRecord() {
 // number should be the same as the order the Shape was written to the
 // Shapefile. The field value corresponds to the field in the slice used in
 // SetFields.
-func (w *Writer) WriteAttribute(row int, field int, value interface{}) error {
+func (w *Writer) WriteAttribute(row int, field int, value any) error {
 	if field < 0 || field >= len(w.dbfFields) {
 		return fmt.Errorf("field index %d out of range [0, %d)", field, len(w.dbfFields))
 	}

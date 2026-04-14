@@ -101,7 +101,7 @@ func ShapeToGeoJSONString(shape Shape) (string, error) {
 	geoJSON := &GeoJSON{
 		Type:       "Feature",
 		Geometry:   geometry,
-		Properties: make(map[string]interface{}),
+		Properties: make(map[string]any),
 	}
 
 	data, err := json.MarshalIndent(geoJSON, "", "  ")

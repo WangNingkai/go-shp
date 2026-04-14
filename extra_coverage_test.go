@@ -40,7 +40,7 @@ func TestConvertShapefileToGeoJSONString(t *testing.T) {
 				return
 			}
 			if !tt.wantErr {
-				var result map[string]interface{}
+				var result map[string]any
 				if json.Unmarshal([]byte(got), &result) != nil {
 					t.Error("output is not valid JSON")
 				}
@@ -67,7 +67,7 @@ func TestBatchConvertGeoJSONsToShapefiles(t *testing.T) {
 						Type:        "Point",
 						Coordinates: []float64{1.0, 2.0},
 					},
-					Properties: map[string]interface{}{},
+					Properties: map[string]any{},
 				},
 			},
 		}

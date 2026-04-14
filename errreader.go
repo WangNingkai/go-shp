@@ -45,7 +45,7 @@ func (ew *errWriter) Write(p []byte) (n int, err error) {
 }
 
 // writeLE writes little-endian encoded data into the writer, accumulating any error into ew.e.
-func writeLE(ew *errWriter, v interface{}) {
+func writeLE(ew *errWriter, v any) {
 	if ew.e != nil {
 		return
 	}
@@ -55,7 +55,7 @@ func writeLE(ew *errWriter, v interface{}) {
 }
 
 // writeBE writes big-endian encoded data into the writer, accumulating any error into ew.e.
-func writeBE(ew *errWriter, v interface{}) {
+func writeBE(ew *errWriter, v any) {
 	if ew.e != nil {
 		return
 	}
@@ -65,7 +65,7 @@ func writeBE(ew *errWriter, v interface{}) {
 }
 
 // readLE reads little-endian encoded data into v, accumulating any error into er.e.
-func readLE(er *errReader, v interface{}) {
+func readLE(er *errReader, v any) {
 	if er.e != nil {
 		return
 	}
@@ -75,7 +75,7 @@ func readLE(er *errReader, v interface{}) {
 }
 
 // readBE reads big-endian encoded data into v, accumulating any error into er.e.
-func readBE(er *errReader, v interface{}) {
+func readBE(er *errReader, v any) {
 	if er.e != nil {
 		return
 	}

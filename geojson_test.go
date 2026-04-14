@@ -40,7 +40,7 @@ func TestGeoJSONToShapeConversion(t *testing.T) {
 	// 创建一个 GeoJSON geometry
 	geometry := &shp.Geometry{
 		Type:        "Point",
-		Coordinates: []interface{}{-122.4194, 37.7749},
+		Coordinates: []any{-122.4194, 37.7749},
 	}
 
 	// 转换为 Shape
@@ -120,7 +120,7 @@ func ExampleGeoJSONConverter_ShapeToGeoJSON() {
 	feature := &shp.Feature{
 		Type:     "Feature",
 		Geometry: geometry,
-		Properties: map[string]interface{}{
+		Properties: map[string]any{
 			"name": "Sample Line",
 			"id":   1,
 		},
@@ -175,7 +175,7 @@ func ExampleGeoJSONConverter_GeoJSONToShapefile() {
 					Type:        "Point",
 					Coordinates: []float64{-122.4194, 37.7749},
 				},
-				Properties: map[string]interface{}{
+				Properties: map[string]any{
 					"name":       "San Francisco",
 					"population": 884363,
 				},
@@ -186,7 +186,7 @@ func ExampleGeoJSONConverter_GeoJSONToShapefile() {
 					Type:        "Point",
 					Coordinates: []float64{-74.0059, 40.7128},
 				},
-				Properties: map[string]interface{}{
+				Properties: map[string]any{
 					"name":       "New York",
 					"population": 8336817,
 				},

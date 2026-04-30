@@ -101,6 +101,93 @@ err = shp.ConvertGeoJSONToShapefile("input.geojson", "output.shp")
 - `FloatField(name, size, precision)`
 - `DateField(name)`
 
+## 配置选项
+
+### Reader 配置
+
+```go
+// 基础使用 - 使用默认配置
+reader, err := shp.Open("file.shp")
+
+// 容错模式 - 跳过损坏的数据
+reader, err := shp.Open("file.shp", 
+    shp.WithIgnoreCorruptedShapes(true))
+
+// 内存限制 - 限制最大内存使用量（字节）
+// 当超过限制时，Next() 返回错误
+reader, err := shp.Open("file.shp",
+    shp.WithMaxMemoryUsage(50*1024*1024)) // 50MB
+
+// 缓冲配置 - 调整I/O缓冲大小
+reader, err := shp.Open("file.shp",
+    shp.WithBuffering(true, 128*1024)) // 128KB缓冲
+
+// 调试模式 - 输出详细日志
+reader, err := shp.Open("file.shp",
+    shp.WithDebug(true))
+
+// 组合使用多个选项
+reader, err := shp.Open("file.shp",
+    shp.WithIgnoreCorruptedShapes(true),
+    shp.WithMaxMemoryUsage(100*1024*1024),
+    shp.WithDebug(true))
+```
+
+### Writer 配置
+
+```go
+// 基础使用
+writer, err := shp.Create("output.shp", shp.POINT)
+
+// 启用数据验证
+writer, err := shp.CreateWithConfig("output.shp", shp.POINT,
+    shp.DefaultWriterConfig(),
+    shp.WithValidation(true))
+
+// 同步写入 - 每次写入后立即同步到磁盘（较慢但安全）
+writer, err := shp.CreateWithConfig("output.shp", shp.POINT,
+    shp.DefaultWriterConfig(),
+    shp.WithSync(true))
+```
+
+## 错误处理
+
+库提供了结构化的错误类型，便于精细化的错误处理：
+
+```go
+import (
+    "errors"
+    "github.com/wangningkai/go-shp"
+)
+
+reader, err := shp.Open("file.shp")
+if err != nil {
+    var shapeErr *shp.ShapeError
+    if errors.As(err, &shapeErr) {
+        // 根据错误类型处理
+        switch shapeErr.Type {
+        case shp.ErrInvalidFormat:
+            log.Fatal("文件格式不正确")
+        case shp.ErrCorruptedFile:
+            log.Fatal("文件已损坏")
+        case shp.ErrExceedsMemoryLimit:
+            log.Fatal("超过内存限制，请增加MaxMemoryUsage或减小文件")
+        case shp.ErrIO:
+            log.Fatal("I/O错误:", shapeErr.Cause)
+        }
+    }
+    log.Fatal(err)
+}
+
+// 在读取过程中检查错误
+for reader.Next() {
+    // 处理数据
+}
+if reader.Err() != nil {
+    log.Fatal("读取失败:", reader.Err())
+}
+```
+
 ## 命令行工具
 
 ```bash
@@ -117,45 +204,109 @@ convert -input=file.shp -output=file.geojson -skip-corrupted
 
 ## 处理超大文件的最佳实践
 
-当 Shapefile 体积很大（数百万要素）时，优先使用「流式」方式导出 GeoJSON，可显著降低内存占用并提升稳定性：
+当 Shapefile 体积很大（数百万要素）时，建议按以下方式优化：
 
-### 命令行使用
-
-```bash
-# 从 .shp 流式写出到 .geojson（始终紧凑输出，无缩进）
-go run cmd/convert/main.go -input=big.shp -output=big.geojson -stream
-
-# 遇到损坏的 shape 仍继续（忽略错误的记录）
-go run cmd/convert/main.go -input=big.shp -output=big.geojson -stream -skip-corrupted
-```
-
-### 编程接口
+### 1. 流式读取 + 内存限制
 
 ```go
-f, _ := os.Create("big.geojson")
+// 流式读取大文件，限制内存使用
+reader, err := shp.Open("large.shp",
+    shp.WithMaxMemoryUsage(100*1024*1024),  // 100MB 限制
+    shp.WithBuffering(true, 256*1024))      // 256KB 缓冲，减少I/O次数
+if err != nil {
+    log.Fatal(err)
+}
+defer reader.Close()
+
+// 逐条处理，避免一次性加载到内存
+processed := 0
+for reader.Next() {
+    n, shape := reader.Shape()
+    // 处理单条记录
+    processShape(shape)
+    
+    // 定期检查内存是否达到限制
+    if processed%10000 == 0 {
+        log.Printf("Processed %d shapes\n", processed)
+    }
+    processed++
+}
+if reader.Err() != nil {
+    log.Fatal(reader.Err())
+}
+```
+
+### 2. 流式 GeoJSON 导出
+
+```go
+// 从 .shp 流式写出到 .geojson（边读边写，内存占用恒定）
+f, _ := os.Create("output.geojson")
 defer f.Close()
 conv := shp.GeoJSONConverter{}
-// 可选忽略损坏记录：shp.WithIgnoreCorruptedShapes(true)
-_ = conv.ShapefileToGeoJSONStream("big.shp", f, shp.WithIgnoreCorruptedShapes(true))
+err := conv.ShapefileToGeoJSONStream("large.shp", f, 
+    shp.WithIgnoreCorruptedShapes(true))
+if err != nil {
+    log.Fatal(err)
+}
 ```
 
-### 说明与注意事项
+### 3. 容错处理 + 调试
 
-- 流式写出边读边写，不构建完整 `features` 列表，内存使用随记录大小缓慢增长而非峰值暴涨。
-- 流式模式下输出为紧凑 JSON（无缩进），若需要可读性输出，请使用非流式模式并移除 `-stream`，改用 `-compact=false`（默认即可）。
-- `-skip-corrupted` 可与 `-stream` 同时使用，用于在存在损坏记录时尽可能完成其余数据的导出。
-
-## 容错模式
-
-对于部分损坏的 Shapefile，可以使用容错模式跳过问题 shape：
+当遇到损坏的数据时：
 
 ```go
-// 使用容错转换
-err := shp.ConvertShapefileToGeoJSONSkipCorrupted("input.shp", "output.geojson")
+reader, err := shp.Open("corrupted.shp",
+    shp.WithIgnoreCorruptedShapes(true),  // 跳过损坏的shape
+    shp.WithDebug(true))                  // 输出详细日志，帮助定位问题
+if err != nil {
+    log.Fatal(err)
+}
+defer reader.Close()
 
-// 或者使用配置选项
+skipped := 0
+for reader.Next() {
+    // 正常处理
+}
+// 注意：损坏的shape被跳过，不会导致整个读取过程中断
+log.Printf("Read completed (some records may have been skipped)")
+```
+
+### 4. 命令行工具快速处理
+
+```bash
+# 流式导出到 GeoJSON
+go run cmd/convert/main.go -input=large.shp -output=large.geojson -stream
+
+# 遇到损坏数据继续处理
+go run cmd/convert/main.go -input=large.shp -output=large.geojson -stream -skip-corrupted
+```
+
+### 性能优化建议
+
+| 场景 | 推荐配置 | 说明 |
+|------|--------|------|
+| **超大文件 (>1GB)** | MaxMemoryUsage=100-200MB, Buffering=256KB | 内存受限情况 |
+| **网络存储** | Buffering=512KB, EnableBuffering=true | 减少I/O次数 |
+| **容错读取** | IgnoreCorruptedShapes=true, Debug=true | 定位问题同时继续 |
+| **快速批量处理** | EnableBuffering=true, BufferSize=1MB | 内存充足情况 |
+| **写入大量数据** | EnableSync=false (default) | 批量写入更快 |
+
+## 容错模式详解
+
+对于部分损坏的 Shapefile，库会：
+1. 尝试读取下一个 shape 记录
+2. 如果失败且启用 `IgnoreCorruptedShapes`，自动跳过到下一个有效位置
+3. 继续读取后续记录，直到文件结束
+
+```go
 reader, err := shp.OpenWithConfig("input.shp", shp.DefaultReaderConfig(),
     shp.WithIgnoreCorruptedShapes(true))
+
+validShapes := 0
+for reader.Next() {
+    validShapes++
+}
+log.Printf("Successfully read %d valid shapes\n", validShapes)
 ```
 
 ## 开发

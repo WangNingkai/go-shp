@@ -19,6 +19,8 @@ const (
 	ErrInvalidField
 	// ErrIO IO错误
 	ErrIO
+	// ErrExceedsMemoryLimit 超过内存限制
+	ErrExceedsMemoryLimit
 )
 
 // ShapeError 自定义错误类型
@@ -66,4 +68,5 @@ var (
 	ErrInvalidFileHeader    = NewShapeError(ErrCorruptedFile, "invalid file header", nil)
 	ErrFieldTooLong         = NewShapeError(ErrInvalidField, "field value too long", nil)
 	ErrDbfNotInitialized    = NewShapeError(ErrInvalidFormat, "DBF not initialized", nil)
+	ErrMemoryLimitExceeded  = NewShapeError(ErrExceedsMemoryLimit, "memory usage exceeds configured limit", nil)
 )

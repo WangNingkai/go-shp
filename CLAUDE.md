@@ -59,12 +59,17 @@ make build
 
 ### Error Handling (`errors.go`)
 - Custom `ShapeError` type with `Type`, `Message`, `Cause`
-- Error types: `ErrInvalidFormat`, `ErrCorruptedFile`, `ErrUnsupportedType`, `ErrInvalidField`, `ErrIO`
+- Error types: `ErrInvalidFormat`, `ErrCorruptedFile`, `ErrUnsupportedType`, `ErrInvalidField`, `ErrIO`, `ErrExceedsMemoryLimit`
 - Use `NewShapeError()` with error wrapping
+- Always check `reader.Err()` after iteration loop
 
 ### Configuration (`options.go`)
 - Functional options pattern: `ReaderOption`, `WriterOption`
-- Key reader options: `WithIgnoreCorruptedShapes()`, `WithBuffering()`, `WithDebug()`
+- Key reader options:
+  - `WithIgnoreCorruptedShapes(bool)` - Skip broken records, continue reading
+  - `WithMaxMemoryUsage(int64)` - Memory limit enforcement (0 = unlimited)
+  - `WithBuffering(bool, size int)` - I/O buffer configuration (default 64KB)
+  - `WithDebug(bool)` - Verbose logging for diagnostics
 
 ## Key Patterns
 
@@ -106,15 +111,61 @@ conv.ShapefileToGeoJSONStream("large.shp", f, shp.WithIgnoreCorruptedShapes(true
 - **Functional options** for configurable APIs
 - **Streaming first** for large file processing
 - **Comments in English** for exported symbols; debug notes can use Chinese
+- **Memory tracking** - Track allocations and use MaxMemoryUsage to prevent OOM
 
 ## File Organization
 
 - `shapefile.go` - Core types and Shape interface
-- `reader.go` - Shapefile reader
+- `reader.go` - Shapefile reader with streaming and memory limits
 - `writer.go` - Shapefile writer
 - `geojson.go` - GeoJSON types and converter
 - `conversion.go` - High-level conversion functions
-- `errors.go` - Custom error types
-- `options.go` - Configuration options
-- `*_utils.go` - Utility functions (DBF, bbox, etc.)
+- `errors.go` - Custom error types with memory limit checks
+- `options.go` - Configuration options (Reader/Writer)
+- `*_utils.go` - Utility functions (DBF, bbox, header, record)
 - `cmd/convert/main.go` - CLI tool
+
+## Best Practices
+
+### Memory Management
+1. **For large files**: Always set `MaxMemoryUsage` to prevent out-of-memory errors
+2. **Streaming**: Use `ShapefileToGeoJSONStream()` for large conversions
+3. **Batch processing**: Process shapes one at a time, not all at once
+4. **Monitor**: Use `WithDebug(true)` to see memory usage in logs
+
+### Error Handling
+1. **Always check errors** after `Open()`, `Create()`, and in loops
+2. **Use type assertions** to differentiate error types:
+   ```go
+   var shapeErr *ShapeError
+   if errors.As(err, &shapeErr) {
+       switch shapeErr.Type {
+       case ErrExceedsMemoryLimit:
+           // Handle memory limit
+       case ErrCorruptedFile:
+           // Handle corruption
+       }
+   }
+   ```
+3. **Check reader.Err()** after iteration completes
+4. **Defer Close()** to ensure cleanup
+
+### Performance Optimization
+1. **Buffer size**: Increase for network storage (256KB-1MB), keep default (64KB) for local
+2. **Validation**: Disable validation in write-only scenarios where speed matters
+3. **Sync mode**: Keep `EnableSync=false` (default) for batch writes, only enable for safety-critical scenarios
+4. **Batch operations**: Group multiple shape writes before closing to reduce I/O overhead
+
+### Testing
+- **Table-driven tests** for geometry type combinations
+- **Example tests** to verify API contracts
+- **Benchmark tests** to catch performance regressions
+- **Fault-tolerance tests** with corrupted test files
+- **Coverage**: Aim for 80%+ with focus on error paths
+
+### Adding New Features
+1. **Maintain zero dependencies** - use only Go stdlib
+2. **Preserve streaming design** - avoid loading entire files into memory
+3. **Add options** for configurable behavior (follow functional options pattern)
+4. **Update both reader and writer** for symmetric APIs
+5. **Document edge cases** - especially for Z/M coordinates and large files

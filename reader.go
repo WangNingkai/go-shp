@@ -35,6 +35,9 @@ type Reader struct {
 
 	// internal reusable buffer for attribute reads to reduce allocations
 	attrBuf []byte
+
+	// memory tracking for safety
+	memoryUsed int64
 }
 
 // debugf logs a debug message if debug mode is enabled.
@@ -206,6 +209,14 @@ func newShape(shapetype ShapeType) (Shape, error) {
 func (r *Reader) Next() bool {
 	r.shapeCount++
 	r.debugf("Processing shape #%d\n", r.shapeCount)
+
+	// Check memory limit before proceeding
+	if r.config != nil && r.config.MaxMemoryUsage > 0 && r.memoryUsed > r.config.MaxMemoryUsage {
+		r.err = NewShapeError(ErrExceedsMemoryLimit,
+			fmt.Sprintf("memory usage %d exceeds limit %d", r.memoryUsed, r.config.MaxMemoryUsage), nil)
+		return false
+	}
+
 	cur, _ := r.shp.Seek(0, io.SeekCurrent)
 	if cur >= r.filelength {
 		return false
@@ -296,6 +307,13 @@ func (r *Reader) Next() bool {
 	expectedPos := beforeRead + int64(size)*2
 	if afterRead != expectedPos {
 		r.debugf("Warning: position mismatch after reading shape %d. Expected: %d, Actual: %d\n", num, expectedPos, afterRead)
+	}
+
+	// Update memory usage tracking
+	recordSize := int64(size) * 2
+	r.memoryUsed += recordSize
+	if r.config != nil && r.config.Debug && r.config.MaxMemoryUsage > 0 {
+		r.debugf("Memory usage: %d / %d bytes\n", r.memoryUsed, r.config.MaxMemoryUsage)
 	}
 
 	// move to next object
